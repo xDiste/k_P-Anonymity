@@ -8,7 +8,7 @@ from node import Node
 from dataset_anonymized import DatasetAnonymized
 max_level = 4
 
-
+# OK
 def clean_data(dataset_path_to_clean):
     """
     Print on file the dataset cleaned, in this case remove all columns normalized
@@ -19,7 +19,7 @@ def clean_data(dataset_path_to_clean):
     time_series = time_series.loc[0:len(time_series), "Product_Code":"W51"]
     time_series.to_csv(dataset_path_to_clean.replace(".csv", "_Final.csv"), index=False)
 
-
+# OK
 def find_tuple_with_maximum_ncp(fixed_tuple, time_series, key_fixed_tuple, maximum_value, minimum_value):
     """
     By scanning all tuples once, we can find tuple t1 that maximizes NCP(fixed_tuple, t1)
@@ -37,11 +37,115 @@ def find_tuple_with_maximum_ncp(fixed_tuple, time_series, key_fixed_tuple, maxim
                 tuple_with_max_ncp = key
     return tuple_with_max_ncp
 
-
-def k_anonymity_top_down_approach(time_series=None, k_value=None, columns_list=None, maximum_value=None,
-                                  minimum_value=None, time_series_k_anonymized=None):
+# OK
+def find_tuple_with_maximum_vl(fixed_tuple, time_series, key_fixed_tuple):
     """
-    k-anonymity based on work of Xu et al. 2006,
+    By scanning all tuples once, we can find tuple t1 that maximizes VL(fixed_tuple, t1)
+    :param fixed_tuple:
+    :param time_series:
+    :param key_fixed_tuple:
+    :return:
+    """
+    max_value = 0
+    tuple_with_max_vl = None
+    for key, value in time_series.items():
+        if key != key_fixed_tuple:
+            vl = compute_instant_value_loss([fixed_tuple, time_series[key]])
+            if vl >= max_value:
+                tuple_with_max_vl = key
+    return tuple_with_max_vl
+
+# OK
+def compute_normalized_certainty_penalty_on_ai(table=None, maximum_value=None, minimum_value=None):
+    """
+    Compute NCP(T)
+    :param table:
+    :return:
+    """
+    z_1 = list()
+    y_1 = list()
+    a = list()
+    for index_attribute in range(0, len(table[0])):
+        temp_z1 = 0
+        temp_y1 = float('inf')
+        for row in table:
+            if row[index_attribute] > temp_z1:
+                temp_z1 = row[index_attribute]
+            if row[index_attribute] < temp_y1:
+                temp_y1 = row[index_attribute]
+        z_1.append(temp_z1)
+        y_1.append(temp_y1)
+        a.append(abs(maximum_value[index_attribute] - minimum_value[index_attribute]))
+    ncp_t = 0
+    for index in range(0, len(z_1)):
+        try:
+            ncp_t += (z_1[index] - y_1[index]) / a[index]
+        except ZeroDivisionError:
+            ncp_t += 0
+    ncp_T = len(table)*ncp_t
+    return ncp_T
+
+# OK
+def compute_instant_value_loss(table):
+    """
+    Compute VL(T)
+    :param table:
+    :return:
+    """
+    r_plus = list()
+    r_minus = list()
+
+    for index_attribute in range(0, len(table[0])):
+        temp_r_plus = 0
+        temp_r_minus = float('inf')
+        for row in table:
+            if row[index_attribute] > temp_r_plus:
+                temp_r_plus = row[index_attribute]
+            if row[index_attribute] < temp_r_minus:
+                temp_r_minus = row[index_attribute]
+        r_plus.append(temp_r_plus)
+        r_minus.append(temp_r_minus)
+    vl_t = 0
+    for index in range(0, len(table[0])):
+        vl_t += pow((r_plus[index] - r_minus[index]), 2)
+    vl_t = np.sqrt(vl_t/len(table[0]))
+    vl_T = len(table) * vl_t
+    return vl_T
+
+# OK
+def get_list_min_and_max_from_table(table):
+    """
+    From a table get a list of maximum and minimum value of each attribut
+    :param table:
+    :return: list_of_minimum_value, list_of_maximum_value
+    """
+    attributes_maximum_value = table[0]
+    attributes_minimum_value = table[0]
+
+    for row in range(0, len(table)):
+        for index_attribute in range(0, len(table[row])):
+            if table[row][index_attribute] > attributes_maximum_value[index_attribute]:
+                attributes_maximum_value[index_attribute] = table[row][index_attribute]
+            if table[row][index_attribute] < attributes_minimum_value[index_attribute]:
+                attributes_minimum_value[index_attribute] = table[row][index_attribute]
+
+    return attributes_minimum_value, attributes_maximum_value
+
+# OK
+def find_group_with_min_value_loss(group_to_search, group_to_merge, index_ignored):
+    p_group_min = {"index" : None, "group" : dict(), "vl" : float("inf")} 
+    for index, group in enumerate(group_to_search):
+        if index not in index_ignored: 
+            vl = compute_instant_value_loss(list(group.values()) + list(group_to_merge.values()))
+            if p_group_min["vl"] > vl:
+                p_group_min["index"] = index; p_group_min["group"] = group; p_group_min["vl"] = vl
+    return p_group_min["index"], p_group_min["group"]
+
+
+# AKA top_down_greedy_clustering - da controllare
+def top_down_clustering(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized=None, algorithm):
+    """
+    top down clustering similar to k-anonymity based on work of Xu et al. 2006,
     Utility-Based Anonymization for Privacy Preservation with Less Information Loss
     :param time_series:
     :param k_value:
@@ -59,20 +163,19 @@ def k_anonymity_top_down_approach(time_series=None, k_value=None, columns_list=N
         group_u = dict()
         group_v = dict()
         group_u[random_tuple] = time_series[random_tuple]
-        #del time_series[random_tuple]
+        del time_series[random_tuple]
+
         last_row = random_tuple
+        
         for round in range(0, rounds*2 - 1):
             if len(time_series) > 0:
                 if round % 2 == 0:
                     v = find_tuple_with_maximum_ncp(group_u[last_row], time_series, last_row, maximum_value, minimum_value)
-                    logger.info("{} round: Find tuple (v) that has max ncp {}".format(round +1,v))
-
                     group_v[v] = time_series[v]
                     last_row = v
                     del time_series[v]
                 else:
                     u = find_tuple_with_maximum_ncp(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
-                    logger.info("{} round: Find tuple (u) that has max ncp {}".format(round+1, u))
                     group_u[u] = time_series[u]
                     last_row = u
                     del time_series[u]
@@ -135,7 +238,6 @@ def k_anonymity_top_down_approach(time_series=None, k_value=None, columns_list=N
                 group_u[key] = row_temp
             del time_series[key]
 
-        logger.info("Group u: {}, Group v: {}".format(len(group_u), len(group_v)))
         if len(group_u) > k_value:
             # recursive partition group_u
             # maximum_value, minimum_value = get_list_min_and_max_from_table(list(group_u.values()))
@@ -156,55 +258,22 @@ def k_anonymity_top_down_approach(time_series=None, k_value=None, columns_list=N
             time_series_k_anonymized.append(group_v)
 
 
-def compute_normalized_certainty_penalty_on_ai(table=None, maximum_value=None, minimum_value=None):
+# OK
+def KAPRA(time_series_dict=None, p_value=None, paa_value=None, max_level=None):
     """
-    Compute NCP(T)
-    :param table:
-    :return:
+    KAPRA Algorithm for time-series anonymization
     """
-    z_1 = list()
-    y_1 = list()
-    a = list()
-    for index_attribute in range(0, len(table[0])):
-        temp_z1 = 0
-        temp_y1 = float('inf')
-        for row in table:
-            if row[index_attribute] > temp_z1:
-                temp_z1 = row[index_attribute]
-            if row[index_attribute] < temp_y1:
-                temp_y1 = row[index_attribute]
-        z_1.append(temp_z1)
-        y_1.append(temp_y1)
-        a.append(abs(maximum_value[index_attribute] - minimum_value[index_attribute]))
-    ncp_t = 0
-    for index in range(0, len(z_1)):
-        try:
-            ncp_t += (z_1[index] - y_1[index]) / a[index]
-        except ZeroDivisionError:
-            ncp_t += 0
-    ncp_T = len(table)*ncp_t
-    return ncp_T
+    dataset = Dataset()
+    dataset.data.append(time_series_dict)
+    good_leaf_nodes = list()
+    bad_leaf_nodes = list()
+    node = Node(level=1, group=time_series_dict, paa_value=paa_value)
+    node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
+    dataset.recycle_bad_leaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value)
+    return dataset
 
 
-def get_list_min_and_max_from_table(table):
-    """
-        From a table get a list of maximum and minimum value of each attribut
-    :param table:
-    :return: list_of_minimum_value, list_of_maximum_value
-    """
-
-    attributes_maximum_value = table[0]
-    attributes_minimum_value = table[0]
-
-    for row in range(1, len(table)):
-        for index_attribute in range(0, len(table[row])):
-            if table[row][index_attribute] > attributes_maximum_value[index_attribute]:
-                attributes_maximum_value[index_attribute] = table[row][index_attribute]
-            if table[row][index_attribute] < attributes_minimum_value[index_attribute]:
-                attributes_minimum_value[index_attribute] = table[row][index_attribute]
-
-    return attributes_minimum_value, attributes_maximum_value
-
+# Need two main, one naive and one KAPRA
 def main(k_value=None, p_value=None, paa_value=None, dataset_path=None):
     """
 
