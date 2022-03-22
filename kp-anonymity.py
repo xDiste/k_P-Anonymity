@@ -8,7 +8,6 @@ from node import Node
 from dataset_anonymized import DatasetAnonymized
 max_level = 4
 
-# OK
 def clean_data(dataset_path_to_clean):
     """
     Print on file the dataset cleaned, in this case remove all columns normalized
@@ -19,7 +18,7 @@ def clean_data(dataset_path_to_clean):
     time_series = time_series.loc[0:len(time_series), "Product_Code":"W51"]
     time_series.to_csv(dataset_path_to_clean.replace(".csv", "_Final.csv"), index=False)
 
-# OK
+
 def find_tuple_with_maximum_ncp(fixed_tuple, time_series, key_fixed_tuple, maximum_value, minimum_value):
     """
     By scanning all tuples once, we can find tuple t1 that maximizes NCP(fixed_tuple, t1)
@@ -37,7 +36,7 @@ def find_tuple_with_maximum_ncp(fixed_tuple, time_series, key_fixed_tuple, maxim
                 tuple_with_max_ncp = key
     return tuple_with_max_ncp
 
-# OK
+
 def find_tuple_with_maximum_vl(fixed_tuple, time_series, key_fixed_tuple):
     """
     By scanning all tuples once, we can find tuple t1 that maximizes VL(fixed_tuple, t1)
@@ -55,7 +54,7 @@ def find_tuple_with_maximum_vl(fixed_tuple, time_series, key_fixed_tuple):
                 tuple_with_max_vl = key
     return tuple_with_max_vl
 
-# OK
+
 def compute_normalized_certainty_penalty_on_ai(table=None, maximum_value=None, minimum_value=None):
     """
     Compute NCP(T)
@@ -85,7 +84,7 @@ def compute_normalized_certainty_penalty_on_ai(table=None, maximum_value=None, m
     ncp_T = len(table)*ncp_t
     return ncp_T
 
-# OK
+
 def compute_instant_value_loss(table):
     """
     Compute VL(T)
@@ -112,7 +111,7 @@ def compute_instant_value_loss(table):
     vl_T = len(table) * vl_t
     return vl_T
 
-# OK
+
 def get_list_min_and_max_from_table(table):
     """
     From a table get a list of maximum and minimum value of each attribut
@@ -131,8 +130,8 @@ def get_list_min_and_max_from_table(table):
 
     return attributes_minimum_value, attributes_maximum_value
 
-# OK
-def find_group_with_min_value_loss(group_to_search, group_to_merge, index_ignored):
+
+def minValueLossGroup(group_to_search, group_to_merge, index_ignored):
     p_group_min = {"index" : None, "group" : dict(), "vl" : float("inf")} 
     for index, group in enumerate(group_to_search):
         if index not in index_ignored: 
@@ -142,8 +141,7 @@ def find_group_with_min_value_loss(group_to_search, group_to_merge, index_ignore
     return p_group_min["index"], p_group_min["group"]
 
 
-# AKA top_down_greedy_clustering - da controllare
-def top_down_clustering(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized=None, algorithm):
+def top_down_clustering(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized=None, algorithm=None):
     """
     top down clustering similar to k-anonymity based on work of Xu et al. 2006,
     Utility-Based Anonymization for Privacy Preservation with Less Information Loss
@@ -164,119 +162,183 @@ def top_down_clustering(time_series=None, k_value=None, columns_list=None, maxim
         group_v = dict()
         group_u[random_tuple] = time_series[random_tuple]
         del time_series[random_tuple]
+        lastRow = random_tuple
 
-        last_row = random_tuple
-        
-        for round in range(0, rounds*2 - 1):
+        for round in range(0, rounds*2 - 1): 
             if len(time_series) > 0:
-                if round % 2 == 0:
-                    v = find_tuple_with_maximum_ncp(group_u[last_row], time_series, last_row, maximum_value, minimum_value)
-                    group_v[v] = time_series[v]
-                    last_row = v
-                    del time_series[v]
-                else:
-                    u = find_tuple_with_maximum_ncp(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
+                if round % 2 != 0:
+                    if algorithm == "naive":
+                        u = find_tuple_with_maximum_ncp(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
+                    if algorithm == "kapra":
+                        u = find_tuple_with_maximum_vl(group_v[last_row], time_series, last_row)
+                    group_u.clear()
                     group_u[u] = time_series[u]
                     last_row = u
                     del time_series[u]
-        # First Round
-        # if len(time_series) > 1:
-        #     v_1 = find_tuple_with_maximum_ncp(group_u[random_tuple], time_series, random_tuple, maximum_value, minimum_value)
-        #     logger.info("First round: Find tuple (v1) that has max ncp {}".format(v_1))
-        #     group_v[v_1] = time_series[v_1]
-        #     del time_series[random_tuple]
-        #
-        # # Second Round
-        # if len(time_series) > 1:
-        #     u_2 = find_tuple_with_maximum_ncp(group_v[v_1], time_series, v_1, maximum_value, minimum_value)
-        #     logger.info("Second Round: Find tuple (u2) that has max ncp {}".format(u_2))
-        #     group_u[u_2] = time_series[u_2]
-        #     del time_series[v_1]
-        #
-        # # Third Round
-        # if len(time_series) > 1:
-        #     v_2 = find_tuple_with_maximum_ncp(group_u[u_2], time_series, u_2, maximum_value, minimum_value)
-        #     logger.info("Third Round: Find tuple (v2) that has max ncp {}".format(v_2))
-        #     group_v[v_2] = time_series[v_2]
-        #     del time_series[u_2]
-        #
-        # # Four round
-        # if len(time_series) > 1:
-        #     u_3 = find_tuple_with_maximum_ncp(group_v[v_2], time_series, v_2, maximum_value, minimum_value)
-        #     logger.info("Four Round: find tuple (u3) that has max ncp {}".format(u_3))
-        #     group_u[u_3] = time_series[u_3]
-        #     del time_series[v_2]
-        #
-        # # Five Round
-        # if len(time_series) > 1:
-        #     v_3 = find_tuple_with_maximum_ncp(group_u[u_3], time_series, u_3, maximum_value, minimum_value)
-        #     logger.info("Five Round: find tuple (v3) that has max ncp {}".format(v_3))
-        #     group_v[v_3] = time_series[v_3]
-        #     del time_series[u_3]
-        #     del time_series[v_3]
+                else:
+                    if algorithm == "naive":
+                        v = find_tuple_with_maximum_ncp(group_u[last_row], time_series, last_row, maximum_value, minimum_value)
+                    if algorithm == "kapra":
+                        v = find_tuple_with_maximum_vl(group_u[last_row], time_series, last_row)
+                    group_v.clear()
+                    group_v[v] = time_series[v]
+                    last_row = v
+                    del time_series[v]
 
         # Now Assigned to group with lower uncertain penality
         index_keys_time_series = [x for x in range(0, len(list(time_series.keys())))]
         random.shuffle(index_keys_time_series)
+
         # add random row to group with lower NCP
         keys = [list(time_series.keys())[x] for x in index_keys_time_series]
+
         for key in keys:
             row_temp = time_series[key]
             group_u_values = list(group_u.values())
             group_v_values = list(group_v.values())
             group_u_values.append(row_temp)
             group_v_values.append(row_temp)
-            # max_temp_value_u, min_temp_value_u = get_list_min_and_max_from_table(group_u_values)
-            # max_temp_value_v, min_temp_value_v = get_list_min_and_max_from_table(group_v_values)
+            
+            if algorithm == 'kapra':
+                vl_u = compute_instant_value_loss(group_u_values)
+                vl_v = compute_instant_value_loss(group_v_values)
 
-            ncp_u = compute_normalized_certainty_penalty_on_ai(group_u_values, maximum_value, minimum_value)
-            ncp_v = compute_normalized_certainty_penalty_on_ai(group_v_values, maximum_value, minimum_value)
+                if vl_v < vl_u:
+                    group_v[key] = row_temp
+                else:
+                    group_u[key] = row_temp
+                del time_series[key]
 
-            if ncp_v < ncp_u:
-                group_v[key] = row_temp
-            else:
-                group_u[key] = row_temp
-            del time_series[key]
+            elif algorithm == 'naive':
+                ncp_u = compute_normalized_certainty_penalty_on_ai(group_u_values, maximum_value, minimum_value)
+                ncp_v = compute_normalized_certainty_penalty_on_ai(group_v_values, maximum_value, minimum_value)
+
+                if ncp_v < ncp_u:
+                    group_v[key] = row_temp
+                else:
+                    group_u[key] = row_temp
+                del time_series[key]
 
         if len(group_u) > k_value:
             # recursive partition group_u
-            # maximum_value, minimum_value = get_list_min_and_max_from_table(list(group_u.values()))
-            k_anonymity_top_down_approach(time_series=group_u, k_value=k_value, columns_list=columns_list,
+            top_down_clustering(time_series=group_u, k_value=k_value, columns_list=columns_list,
                                           maximum_value=maximum_value, minimum_value=minimum_value,
-                                          time_series_k_anonymized=time_series_k_anonymized)
+                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm)
         else:
             time_series_k_anonymized.append(group_u)
 
         if len(group_v) > k_value:
             # recursive partition group_v
-
-            # maximum_value, minimum_value = get_list_min_and_max_from_table(list(group_v.values()))
-            k_anonymity_top_down_approach(time_series=group_v, k_value=k_value, columns_list=columns_list,
+            top_down_clustering(time_series=group_v, k_value=k_value, columns_list=columns_list,
                                           maximum_value=maximum_value, minimum_value=minimum_value,
-                                          time_series_k_anonymized=time_series_k_anonymized)
+                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm)
         else:
             time_series_k_anonymized.append(group_v)
 
+# POST-PROCESSING DA FARE
 
-# OK
-def KAPRA(time_series_dict=None, p_value=None, paa_value=None, max_level=None):
+
+# da aggiungere in entrambi i main il post processing
+def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
+    if dataset_path.is_file():
+        # read time_series_from_file
+        time_series = pd.read_csv(dataset_path)
+
+        # get columns name
+        columns = list(time_series.columns)
+        time_series_index = columns.pop(0)  # remove product code
+
+        time_series_dict = dict()
+        
+        # save dict file instead pandas
+        for index, row in time_series.iterrows():
+            time_series_dict[row[time_series_index]] = list(row[columns])
+
+        # create-tree phase
+        good_leaf_nodes = list()
+        bad_leaf_nodes = list()
+
+        # creation root and start splitting node
+        node = Node(level=1, group=time_series_dict, paa_value=paa_value)
+        node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
+
+        # recycle bad-leaves phase
+        suppressed_nodes = list()
+        if(len(bad_leaf_nodes) > 0):
+            Node.recycle_bad_leaves(p_value, good_leaf_nodes, bad_leaf_nodes, suppressed_nodes, paa_value)
+
+        suppressed_nodes_list = list()
+        for node in suppressed_nodes:
+            suppressed_nodes_list.append(node.group) # suppressed nodes
+        
+        # group formation phase
+        # preprocessing
+        pattern_representation_dict = dict() 
+        p_group_list = list() 
+        for node in good_leaf_nodes: 
+            p_group_list.append(node.group)
+            pr = node.pattern_representation
+            for key in node.group:
+                pattern_representation_dict[key] = pr
+
+        p_group_to_add = list()
+        index_to_remove = list()
+
+        for index, p_group in enumerate(p_group_list): 
+            if len(p_group) >= 2*p_value:
+                tree_structure = list()
+                p_group_splitted = list()
+                p_group_to_split = p_group
+
+                # start top down clustering
+                top_down_clustering(time_series=p_group_to_split, partition_size=p_value, time_series_clustered=p_group_splitted, tree_structure=tree_structure, algorithm="kapra")
+                                                                
+        p_group_list = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove ]
+        
+        k_group_list = list()
+        index_to_remove = list() 
+        
+        # step 1
+        for index, group in enumerate(p_group_list):
+            if len(group) >= k_value:
+                index_to_remove.append(index)
+                k_group_list.append(group)
+        
+        p_group_list = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove ]
+
+        # step 2 - 3 - 4
+        index_to_remove = list()
+        p_group_list_size = sum([len(group) for group in p_group_list])
+        
+        while p_group_list_size >= k_value:
+            k_group, index_min = minValueLossGroup(group_to_search=p_group_list, index_ignored=index_to_remove)
+            index_to_remove.append(index_min)
+            p_group_list_size -= len(k_group)
+
+            while len(k_group) < k_value:
+                group_to_add, index_group_to_add = minValueLossGroup(group_to_search=p_group_list, group_to_merge=k_group, index_ignored=index_to_remove)
+                index_to_remove.append(index_group_to_add)
+                k_group.update(group_to_add) 
+                p_group_list_size -= len(group_to_add)
+            k_group_list.append(k_group)   
+        
+        # step 5
+        p_group_remaining = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove ]
+        
+        for p_group in p_group_remaining:
+            k_group, index_k_group = minValueLossGroup(group_to_search=k_group_list, group_to_merge=p_group)
+            k_group_list.pop(index_k_group)
+            k_group.update(p_group)
+            k_group_list.append(k_group)
+
+        #Finish group formation phase
+        dataset_anonymized = DatasetAnonymized(pattern_anonymized_data=pattern_representation_dict, anonymized_data=k_group_list, suppressed_data=suppressed_nodes_list)
+        dataset_anonymized.compute_anonymized_data()
+        dataset_anonymized.save_on_file(output_path)
+
+
+def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
     """
-    KAPRA Algorithm for time-series anonymization
-    """
-    dataset = Dataset()
-    dataset.data.append(time_series_dict)
-    good_leaf_nodes = list()
-    bad_leaf_nodes = list()
-    node = Node(level=1, group=time_series_dict, paa_value=paa_value)
-    node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
-    dataset.recycle_bad_leaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value)
-    return dataset
-
-
-# Need two main, one naive and one KAPRA
-def main(k_value=None, p_value=None, paa_value=None, dataset_path=None):
-    """
-
     :param k_value:
     :param p_value:
     :param dataset_path:
@@ -304,11 +366,8 @@ def main(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         # start k_anonymity_top_down
         time_series_k_anonymized = list()
         time_series_dict_copy = time_series_dict.copy()
-        logger.info("Start k-anonymity top down approach")
-        k_anonymity_top_down_approach(time_series=time_series_dict_copy, k_value=k_value, columns_list=columns,
-                                      maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value,
-                                      time_series_k_anonymized=time_series_k_anonymized)
-        logger.info("End k-anonymity top down approach")
+
+        top_down_clustering(time_series=time_series_dict_copy, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="naive")
 
         # start kp anonymity
         # print(list(time_series_k_anonymized[0].values()))
@@ -321,39 +380,32 @@ def main(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             good_leaf_nodes = list()
             bad_leaf_nodes = list()
             # creation root and start splitting node
-            logger.info("Start Splitting node")
             node = Node(level=1, group=group, paa_value=paa_value)
             node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
-            logger.info("Finish Splitting node")
 
-            logger.info("Start postprocessing node merge all bad leaf node (if exists) in good "
-                        "leaf node with most similar patter")
-            for x in good_leaf_nodes:
-                logger.info("Good leaf node {}, {}".format(x.size, x.pattern_representation))
-            for x in bad_leaf_nodes:
-                logger.info("Bad leaf node {}".format(x.size))
             if len(bad_leaf_nodes) > 0:
-                logger.info("Add bad node {} to good node, start postprocessing".format(len(bad_leaf_nodes)))
                 Node.postprocessing(good_leaf_nodes, bad_leaf_nodes)
-                for x in good_leaf_nodes:
-                    logger.info("Now Good leaf node {}, {}".format(x.size, x.pattern_representation))
 
             dataset_anonymized.pattern_anonymized_data.append(good_leaf_nodes)
+
         dataset_anonymized.compute_anonymized_data()
-        dataset_anonymized.save_on_file("Dataset\output.csv")
+        dataset_anonymized.save_on_file("./output.csv")
 
 
 if __name__ == "__main__":
-
     if len(sys.argv) == 5:
-        k_value = int(sys.argv[1])
-        p_value = int(sys.argv[2])
-        paa_value = int(sys.argv[3])
-        dataset_path = sys.argv[4]
+        algorithm = sys.argv[1]
+        k_value = int(sys.argv[2])
+        p_value = int(sys.argv[3])
+        paa_value = int(sys.argv[4])
+        dataset_path = sys.argv[5]
         if k_value > p_value:
-            main(k_value=k_value, p_value=p_value, paa_value=paa_value, dataset_path=dataset_path)
+            if algorithm == 'naive':
+                main_Naive(k_value=k_value, p_value=p_value, paa_value=paa_value, dataset_path=dataset_path)
+            elif algorithm == 'kapra':
+                main_KAPRA(k_value=k_value, p_value=p_value, paa_value=paa_value, dataset_path=dataset_path)
         else:
             print("[*] Usage: python kp-anonymity.py k_value p_value paa_value dataset.csv")
             print("[*] k_value should be greater than p_value")
     else:
-        print("[*] Usage: python kp-anonymity.py k_value p_value paa_value dataset.csv")
+        print("[*] Usage: python kp-anonymity.py algorithm k_value p_value paa_value dataset.csv")
