@@ -141,7 +141,7 @@ def minValueLossGroup(group_to_search, group_to_merge, index_ignored):
     return p_group_min["index"], p_group_min["group"]
 
 
-def top_down_clustering(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized=None, algorithm=None):
+def top_down_clustering(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized=None, algorithm=None, tree=None, label='r'):
     """
     top down clustering similar to k-anonymity based on work of Xu et al. 2006,
     Utility-Based Anonymization for Privacy Preservation with Less Information Loss
@@ -223,22 +223,25 @@ def top_down_clustering(time_series=None, k_value=None, columns_list=None, maxim
             # recursive partition group_u
             top_down_clustering(time_series=group_u, k_value=k_value, columns_list=columns_list,
                                           maximum_value=maximum_value, minimum_value=minimum_value,
-                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm)
+                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm, tree=tree, label=label+'a')
         else:
             time_series_k_anonymized.append(group_u)
+            tree.append(label)
 
         if len(group_v) > k_value:
             # recursive partition group_v
             top_down_clustering(time_series=group_v, k_value=k_value, columns_list=columns_list,
                                           maximum_value=maximum_value, minimum_value=minimum_value,
-                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm)
+                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm, tree=tree, label=label+'b')
         else:
             time_series_k_anonymized.append(group_v)
+            tree.append(label)
 
 # POST-PROCESSING DA FARE
+def postprocessing(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized_postprocessed=None, algorithm=None, tree=None):
 
 
-# da aggiungere in entrambi i main il post processing
+# DA RIVEDERE
 def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
     if dataset_path.is_file():
         # read time_series_from_file
@@ -289,12 +292,20 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                 tree_structure = list()
                 p_group_splitted = list()
                 p_group_to_split = p_group
-
+                
                 # start top down clustering
-                top_down_clustering(time_series=p_group_to_split, partition_size=p_value, time_series_clustered=p_group_splitted, tree_structure=tree_structure, algorithm="kapra")
-                                                                
+                top_down_clustering(time_series=time_series_dict_copy, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="kapra")
+
+                # Postprocessing
+                postprocessing(time_series=time_series_k_anonymized, k_value=k_value, columns_list=column, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized_postprocessed=time_series_postprocessed, algorithm='naive')
+                time_series_k_anonymized = time_series_postprocessed                               
+
+                p_group_to_add += time_series_postprocessed
+                index_to_remove.append(index)
+
         p_group_list = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove ]
-        
+        p_group_list += p_group_to_add
+
         k_group_list = list()
         index_to_remove = list() 
         
@@ -334,7 +345,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         #Finish group formation phase
         dataset_anonymized = DatasetAnonymized(pattern_anonymized_data=pattern_representation_dict, anonymized_data=k_group_list, suppressed_data=suppressed_nodes_list)
         dataset_anonymized.compute_anonymized_data()
-        dataset_anonymized.save_on_file(output_path)
+        dataset_anonymized.save_on_file("./output_kapra.csv")
 
 
 def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
@@ -351,26 +362,28 @@ def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         # get columns name
         columns = list(time_series.columns)
         columns.pop(0)  # remove product code
-        # save all maximum value for each attribute
-        attributes_maximum_value = list()
-        attributes_minimum_value = list()
-        for column in columns:
-            attributes_maximum_value.append(time_series[column].max())
-            attributes_minimum_value.append(time_series[column].min())
+
         time_series_dict = dict()
 
         # save dict file instead pandas
         for index, row in time_series.iterrows():
             time_series_dict[row["Product_Code"]] = list(row["W0":"W51"])
 
+        # save all maximum value for each attribute
+        attributes_maximum_value, attributes_minimum_value = get_list_min_and_max_from_table(time_series_dict)
+
         # start k_anonymity_top_down
         time_series_k_anonymized = list()
-        time_series_dict_copy = time_series_dict.copy()
+        tree = list()
 
-        top_down_clustering(time_series=time_series_dict_copy, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="naive")
+        top_down_clustering(time_series=time_series_dict, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="naive", tree=tree)
 
         # start kp anonymity
-        # print(list(time_series_k_anonymized[0].values()))
+        time_series_postprocessed = list()
+
+        # Postprocessing
+        postprocessing(time_series=time_series_k_anonymized, k_value=k_value, columns_list=column, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized_postprocessed=time_series_postprocessed, algorithm='naive', tree=tree)
+        time_series_k_anonymized = time_series_postprocessed
 
         dataset_anonymized = DatasetAnonymized()
         for group in time_series_k_anonymized:
@@ -389,7 +402,7 @@ def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             dataset_anonymized.pattern_anonymized_data.append(good_leaf_nodes)
 
         dataset_anonymized.compute_anonymized_data()
-        dataset_anonymized.save_on_file("./output.csv")
+        dataset_anonymized.save_on_file("./output_naive.csv")
 
 
 if __name__ == "__main__":
