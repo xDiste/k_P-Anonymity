@@ -6,18 +6,8 @@ from loguru import logger
 import random
 from node import Node
 from dataset_anonymized import DatasetAnonymized
+
 max_level = 4
-
-def clean_data(dataset_path_to_clean):
-    """
-    Print on file the dataset cleaned, in this case remove all columns normalized
-    :param dataset_path_to_clean:
-    :return:
-    """
-    time_series = pd.read_csv(dataset_path)
-    time_series = time_series.loc[0:len(time_series), "Product_Code":"W51"]
-    time_series.to_csv(dataset_path_to_clean.replace(".csv", "_Final.csv"), index=False)
-
 
 def find_tuple_with_maximum_ncp(fixed_tuple, time_series, key_fixed_tuple, maximum_value, minimum_value):
     """
@@ -131,14 +121,14 @@ def get_list_min_and_max_from_table(table):
     return attributes_minimum_value, attributes_maximum_value
 
 
-def minValueLossGroup(group_to_search, group_to_merge, index_ignored):
+def minValueLossGroup(group_to_search=None, group_to_merge=dict(), index_ignored=list()):
     p_group_min = {"index" : None, "group" : dict(), "vl" : float("inf")} 
     for index, group in enumerate(group_to_search):
         if index not in index_ignored: 
             vl = compute_instant_value_loss(list(group.values()) + list(group_to_merge.values()))
             if p_group_min["vl"] > vl:
                 p_group_min["index"] = index; p_group_min["group"] = group; p_group_min["vl"] = vl
-    return p_group_min["index"], p_group_min["group"]
+    return p_group_min["group"], p_group_min["index"]
 
 
 def top_down_clustering(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized=None, algorithm=None, tree=None, label='r'):
@@ -162,35 +152,36 @@ def top_down_clustering(time_series=None, k_value=None, columns_list=None, maxim
         group_v = dict()
         group_u[random_tuple] = time_series[random_tuple]
         del time_series[random_tuple]
-        lastRow = random_tuple
+        last_row = random_tuple
 
         for round in range(0, rounds*2 - 1): 
             if len(time_series) > 0:
-                if round % 2 != 0:
-                    if algorithm == "naive":
-                        u = find_tuple_with_maximum_ncp(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
-                    if algorithm == "kapra":
-                        u = find_tuple_with_maximum_vl(group_v[last_row], time_series, last_row)
-                    group_u.clear()
-                    group_u[u] = time_series[u]
-                    last_row = u
-                    del time_series[u]
-                else:
+                if round % 2 == 0:
                     if algorithm == "naive":
                         v = find_tuple_with_maximum_ncp(group_u[last_row], time_series, last_row, maximum_value, minimum_value)
                     if algorithm == "kapra":
                         v = find_tuple_with_maximum_vl(group_u[last_row], time_series, last_row)
-                    group_v.clear()
                     group_v[v] = time_series[v]
                     last_row = v
                     del time_series[v]
+                else:
+                    if algorithm == "naive":
+                        u = find_tuple_with_maximum_ncp(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
+                    if algorithm == "kapra":
+                        u = find_tuple_with_maximum_vl(group_v[last_row], time_series, last_row)
+                    group_u[u] = time_series[u]
+                    last_row = u
+                    del time_series[u]
 
         # Now Assigned to group with lower uncertain penality
-        index_keys_time_series = [x for x in range(0, len(list(time_series.keys())))]
-        random.shuffle(index_keys_time_series)
+        time_series_keys = []
+        for x in range(0, len(list(time_series.keys()))):
+            time_series_keys.append(x)
+        
+        random.shuffle(time_series_keys)
 
         # add random row to group with lower NCP
-        keys = [list(time_series.keys())[x] for x in index_keys_time_series]
+        keys = [list(time_series.keys())[x] for x in time_series_keys]
 
         for key in keys:
             row_temp = time_series[key]
@@ -221,29 +212,109 @@ def top_down_clustering(time_series=None, k_value=None, columns_list=None, maxim
 
         if len(group_u) > k_value:
             # recursive partition group_u
-            top_down_clustering(time_series=group_u, k_value=k_value, columns_list=columns_list,
-                                          maximum_value=maximum_value, minimum_value=minimum_value,
-                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm, tree=tree, label=label+'a')
+            top_down_clustering(time_series=group_u, k_value=k_value, columns_list=columns_list, maximum_value=maximum_value, minimum_value=minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm, tree=tree, label=label+'a')
         else:
             time_series_k_anonymized.append(group_u)
             tree.append(label)
 
         if len(group_v) > k_value:
             # recursive partition group_v
-            top_down_clustering(time_series=group_v, k_value=k_value, columns_list=columns_list,
-                                          maximum_value=maximum_value, minimum_value=minimum_value,
-                                          time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm, tree=tree, label=label+'b')
+            top_down_clustering(time_series=group_v, k_value=k_value, columns_list=columns_list, maximum_value=maximum_value, minimum_value=minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm=algorithm, tree=tree, label=label+'b')
         else:
             time_series_k_anonymized.append(group_v)
             tree.append(label)
 
-# POST-PROCESSING DA FARE
-def postprocessing(time_series=None, k_value=None, columns_list=None, maximum_value=None, minimum_value=None, time_series_k_anonymized_postprocessed=None, algorithm=None, tree=None):
 
+def postprocessing(time_series=None, k_value=None, maximum_value=None, minimum_value=None, time_series_k_anonymized_postprocessed=None, algorithm=None, tree=None):
+    index_change = list()
+    group_change = list()
+    tree_change = list()
+
+    for index_group, g_group in enumerate(time_series):
+        if len(g_group) < k_value:
+            g_group_values = list(g_group.values())
+            group_label = tree[index_group]
+            index_neighbour = -1
+            measure_neighbour = float('inf') 
+
+            for index_label, label in enumerate(tree): 
+                    if label[:-1] == group_label[:-1]: 
+                        if index_label != index_group: 
+                            if index_label not in index_change:
+                                index_neighbour = index_label
+            
+            if index_neighbour > 0:
+                table = g_group_values + list(time_series[index_neighbour].values())
+
+                if algorithm == "naive":
+                    measure_neighbour = compute_normalized_certainty_penalty_on_ai(table=table, maximum_value=maximum_value, minimum_value=minimum_value)
+                if algorithm == "kapra":
+                    measure_neighbour = compute_instant_value_loss(table=table)
+
+                group_merge_neighbour = dict()
+                group_merge_neighbour.update(g_group)
+                group_merge_neighbour.update(time_series[index_neighbour])
+
+            measure_other_group = float('inf')   
+
+            for index, other_group in enumerate(time_series): 
+                if len(other_group) >= 2*k_value - len(g_group):  
+                    if index not in index_change:    
+                        g_group_copy = g_group.copy()
+                        for round in range(k_value - len(g_group)):       
+                            round_measure = float('inf')
+                            g_group_copy_values = list(g_group_copy.values())
+                            for key, time_series in other_group.items(): 
+                                if key not in g_group_copy.keys(): 
+                                    if algorithm == "naive":
+                                        temp_measure = compute_normalized_certainty_penalty_on_ai(table=g_group_copy_values + [time_series], maximum_value=maximum_value, minimum_value=minimum_value)
+                                    if algorithm == "kapra":
+                                        temp_measure = compute_instant_value_loss(table=g_group_copy_values + [time_series])
+                                    if temp_measure < round_measure:
+                                        round_measure = temp_measure #set new min
+                                        dict_to_add = { key : time_series }
+                            
+                            g_group_copy.update(dict_to_add)
+
+                        if round_measure < measure_other_group: # last ncp : ncp of the group
+                            measure_other_group = round_measure 
+                            group_merge_other_group = g_group_copy
+                            group_merge_remain = {key: value for (key, value) in other_group.items() if key not in g_group_copy.keys()} 
+                            index_other_group = index
+
+            if measure_neighbour < measure_other_group: 
+                index_change.append(index_neighbour)
+                group_change.append(group_merge_neighbour)
+                tree_change.append(tree[index_neighbour][:-1]) 
+
+            else:
+                index_change.append(index_other_group)
+                group_change.append(group_merge_other_group)
+                group_change.append(group_merge_remain)
+                tree_change.append("") # empty label
+
+            index_change.append(index_group)
+    
+    time_series = [group for (index, group) in enumerate(time_series) if index not in index_change]
+    time_series += group_change 
+
+    tree = [label for (index, label) in enumerate(tree) if index not in index_change]
+    tree += tree_change
+
+    bad_group_count = 0
+    for index, group in enumerate(time_series):
+        if len(group) < k_value:
+            bad_group_count += 1
+
+    time_series_k_anonymized_postprocessed += time_series
+    
+    if bad_group_count > 0:
+        postprocessing(time_series=time_series_k_anonymized_postprocessed, k_value=k_value, maximum_value=maximum_value, minimum_value=minimum_value, algorithm=algorithm, tree=tree)
+    
 
 # DA RIVEDERE
 def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
-    if dataset_path.is_file():
+    if os.path.isfile(dataset_path):
         # read time_series_from_file
         time_series = pd.read_csv(dataset_path)
 
@@ -272,12 +343,14 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
 
         suppressed_nodes_list = list()
         for node in suppressed_nodes:
-            suppressed_nodes_list.append(node.group) # suppressed nodes
+            # suppressed nodes
+            suppressed_nodes_list.append(node.group) 
         
         # group formation phase
         # preprocessing
         pattern_representation_dict = dict() 
-        p_group_list = list() 
+        p_group_list = list()
+
         for node in good_leaf_nodes: 
             p_group_list.append(node.group)
             pr = node.pattern_representation
@@ -289,18 +362,18 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
 
         for index, p_group in enumerate(p_group_list): 
             if len(p_group) >= 2*p_value:
-                tree_structure = list()
+                tree = list()
                 p_group_splitted = list()
                 p_group_to_split = p_group
                 
                 # start top down clustering
-                top_down_clustering(time_series=time_series_dict_copy, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="kapra")
+                top_down_clustering(time_series=p_group_to_split, k_value=p_value, time_series_k_anonymized=p_group_splitted, algorithm="kapra", tree=tree)
 
                 # Postprocessing
-                postprocessing(time_series=time_series_k_anonymized, k_value=k_value, columns_list=column, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized_postprocessed=time_series_postprocessed, algorithm='naive')
-                time_series_k_anonymized = time_series_postprocessed                               
+                time_series_k_anonymized_postprocessed = list()
+                postprocessing(time_series=p_group_splitted, k_value=p_value, time_series_k_anonymized_postprocessed=time_series_k_anonymized_postprocessed, algorithm='kapra', tree=tree)
 
-                p_group_to_add += time_series_postprocessed
+                p_group_to_add += time_series_k_anonymized_postprocessed
                 index_to_remove.append(index)
 
         p_group_list = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove ]
@@ -323,6 +396,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         
         while p_group_list_size >= k_value:
             k_group, index_min = minValueLossGroup(group_to_search=p_group_list, index_ignored=index_to_remove)
+            print(k_group)
             index_to_remove.append(index_min)
             p_group_list_size -= len(k_group)
 
@@ -342,11 +416,26 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             k_group.update(p_group)
             k_group_list.append(k_group)
 
-        #Finish group formation phase
-        dataset_anonymized = DatasetAnonymized(pattern_anonymized_data=pattern_representation_dict, anonymized_data=k_group_list, suppressed_data=suppressed_nodes_list)
+        dataset_anonymized = DatasetAnonymized()
+        for group in k_group_list:
+            # append group to anonymzed_data (after we will create a complete dataset anonymized)
+            dataset_anonymized.anonymized_data.append(group)
+
+            # good leaf nodes
+            good_leaf_nodes = list()
+            bad_leaf_nodes = list()
+
+            # creation root and start splitting node
+            node = Node(level=1, group=group, paa_value=paa_value)
+            node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
+
+            if len(bad_leaf_nodes) > 0:
+                Node.postprocessing(good_leaf_nodes, bad_leaf_nodes)
+
+            dataset_anonymized.pattern_anonymized_data.append(good_leaf_nodes)
+
         dataset_anonymized.compute_anonymized_data()
         dataset_anonymized.save_on_file("./output_kapra.csv")
-
 
 def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
     """
@@ -361,37 +450,43 @@ def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
 
         # get columns name
         columns = list(time_series.columns)
-        columns.pop(0)  # remove product code
+        columns.pop(0)
 
+        # save all maximum value for each attribute
+        attributes_maximum_value = list()
+        attributes_minimum_value = list()
+        for column in columns:
+            attributes_maximum_value.append(time_series[column].max())
+            attributes_minimum_value.append(time_series[column].min())
         time_series_dict = dict()
 
         # save dict file instead pandas
         for index, row in time_series.iterrows():
             time_series_dict[row["Product_Code"]] = list(row["W0":"W51"])
 
-        # save all maximum value for each attribute
-        attributes_maximum_value, attributes_minimum_value = get_list_min_and_max_from_table(time_series_dict)
-
         # start k_anonymity_top_down
         time_series_k_anonymized = list()
+        time_series_dict_copy = time_series_dict.copy()
         tree = list()
 
-        top_down_clustering(time_series=time_series_dict, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="naive", tree=tree)
+        top_down_clustering(time_series=time_series_dict_copy, k_value=k_value, columns_list=columns, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized=time_series_k_anonymized, algorithm="naive", tree=tree)
 
-        # start kp anonymity
-        time_series_postprocessed = list()
+        # start kp anonymity    
+        time_series_k_anonymized_postprocessed = list()
 
         # Postprocessing
-        postprocessing(time_series=time_series_k_anonymized, k_value=k_value, columns_list=column, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized_postprocessed=time_series_postprocessed, algorithm='naive', tree=tree)
-        time_series_k_anonymized = time_series_postprocessed
+        #postprocessing(time_series=time_series_k_anonymized, k_value=k_value, maximum_value=attributes_maximum_value, minimum_value=attributes_minimum_value, time_series_k_anonymized_postprocessed=time_series_k_anonymized_postprocessed, algorithm='naive', tree=tree)
+        #time_series_k_anonymized = time_series_k_anonymized_postprocessed
 
         dataset_anonymized = DatasetAnonymized()
         for group in time_series_k_anonymized:
             # append group to anonymzed_data (after we will create a complete dataset anonymized)
             dataset_anonymized.anonymized_data.append(group)
+
             # good leaf nodes
             good_leaf_nodes = list()
             bad_leaf_nodes = list()
+
             # creation root and start splitting node
             node = Node(level=1, group=group, paa_value=paa_value)
             node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
@@ -406,7 +501,7 @@ def main_Naive(k_value=None, p_value=None, paa_value=None, dataset_path=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 5:
+    if len(sys.argv) == 6:
         algorithm = sys.argv[1]
         k_value = int(sys.argv[2])
         p_value = int(sys.argv[3])
