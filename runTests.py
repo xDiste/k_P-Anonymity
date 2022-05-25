@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-K = [7, 9, 10, 15]
-P = [5, 7, 9, 13]
-PAA = [2, 4, 6, 8, 10, 12]
+K = [7, 9, 11]
+P = [5, 7, 9]
+PAA = [2, 4, 6]
 
 pathDataset = './Dataset/Sales_Transaction_Dataset_Weekly_Final.csv'
 
