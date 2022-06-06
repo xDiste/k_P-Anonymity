@@ -9,49 +9,39 @@ from dataset_anonymized import DatasetAnonymized
 
 max_level = 4
 
-# By scanning all tuples once, we can find tuple t that maximizes VL(fixed_tuple, t1)
-def find_tuple_with_maximum_vl(fixed_tuple=None, time_series=None, key_fixed_tuple=None):
-    max_value = 0
+def instantValueLoss(table=None):
+    maxRow = list(); minRow = list()
+    for index in range(0, len(table[0])):
+        maxRowTemp = 0; minRowTemp = float('inf')
+        for row in table:
+            if row[index] < minRowTemp:
+                minRowTemp = row[index]
+            if row[index] > maxRowTemp:
+                maxRowTemp = row[index]
+        maxRow.append(maxRowTemp); minRow.append(minRowTemp)
+    valueLossSum = 0
+    for index in range(0, len(table[0])):
+        valueLossSum += pow((maxRow[index] - minRow[index]), 2)
+    return np.sqrt(valueLossSum/len(table[0])) * len(table)
+
+
+# Find the tuple with maximum value loss
+def maxValueLossTuple(fixed_tuple=None, time_series=None, key_fixed_tuple=None):
+    maxValue = 0
     for key, value in time_series.items():
         if key != key_fixed_tuple:
-            vl = compute_instant_value_loss([fixed_tuple, time_series[key]])
-            if vl >= max_value:
-                tuple_with_max_vl = key
-    return tuple_with_max_vl
+            valueLoss = instantValueLoss([fixed_tuple, time_series[key]])
+            if valueLoss >= maxValue:
+                maxValueLossTuple = key
+    return maxValueLossTuple
 
-
-def compute_instant_value_loss(table=None):
-    """
-    Compute VL(T)
-    :param table:
-    :return:
-    """
-    r_plus = list()
-    r_minus = list()
-
-    for index_attribute in range(0, len(table[0])):
-        r_plusTemp = 0
-        r_minusTemp = float('inf')
-        for row in table:
-            if row[index_attribute] > r_plusTemp:
-                r_plusTemp = row[index_attribute]
-            if row[index_attribute] < r_minusTemp:
-                r_minusTemp = row[index_attribute]
-        r_plus.append(r_plusTemp)
-        r_minus.append(r_minusTemp)
-    vl_t = 0
-    for index in range(0, len(table[0])):
-        vl_t += pow((r_plus[index] - r_minus[index]), 2)
-    vl_t = np.sqrt(vl_t/len(table[0]))
-    vl_T = len(table) * vl_t
-    return vl_T
 
 # Find the group with minimum value loss
 def minValueLossGroup(group_to_search=None, group_to_merge=dict(), index_ignored=list()):
     p_group_min = {"index" : None, "group" : dict(), "vl" : float("inf")} 
     for index, group in enumerate(group_to_search):
         if index not in index_ignored: 
-            vl = compute_instant_value_loss(list(group.values()) + list(group_to_merge.values()))
+            vl = instantValueLoss(list(group.values()) + list(group_to_merge.values()))
             if p_group_min["vl"] > vl:
                 p_group_min["index"] = index; p_group_min["group"] = group; p_group_min["vl"] = vl
     return p_group_min["group"], p_group_min["index"]
@@ -61,9 +51,6 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
     """
     k-anonymity based on work of Xu et al. 2006,
     Utility-Based Anonymization for Privacy Preservation with Less Information Loss
-    :param time_series:
-    :param k_value:
-    :return:
     """
     if len(time_series) < 2*k_value:
         time_series_clustered.append(time_series)
@@ -85,12 +72,12 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
         for round in range(0, rounds*2 - 1): 
             if len(time_series) > 0:
                 if round % 2 == 0:
-                    v = find_tuple_with_maximum_vl(group_u[last_row], time_series, last_row)
+                    v = maxValueLossTuple(group_u[last_row], time_series, last_row)
                     group_v.clear()
                     group_v[v] = time_series[v]
                     last_row = v
                 else:
-                    u = find_tuple_with_maximum_vl(group_v[last_row], time_series, last_row)
+                    u = maxValueLossTuple(group_v[last_row], time_series, last_row)
                     group_u.clear()
                     group_u[u] = time_series[u]
                     last_row = u
@@ -107,8 +94,8 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
             group_u_values = list(group_u.values()); group_v_values = list(group_v.values())
             group_u_values.append(row_temp); group_v_values.append(row_temp)
             
-            vl_u = compute_instant_value_loss(group_u_values)
-            vl_v = compute_instant_value_loss(group_v_values)
+            vl_u = instantValueLoss(group_u_values)
+            vl_v = instantValueLoss(group_v_values)
 
             if vl_v < vl_u:
                 group_v[key] = row_temp
@@ -130,9 +117,7 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
 
 
 def postprocessing(time_series_clustered=None, k_value=None, time_series_postprocessed=None, tree=None):
-    newIndex = list()
-    newGroup = list()
-    newTree = list()
+    newIndex = list(); newGroup = list(); newTree = list()
 
     for index_group, g_group in enumerate(time_series_clustered):
         if len(g_group) < k_value:
@@ -140,14 +125,14 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
             label = tree[index_group]
             index_neighbour = -1
             measure_neighbour = float('inf') 
-            for index_label, label in enumerate(tree): 
-                    if label[:-1] == label[:-1] and index_label != index_group and index_label not in newIndex: 
-                        index_neighbour = index_label
+            for index, label in enumerate(tree): 
+                    if label[:-1] == label[:-1] and index != index_group and index not in newIndex: 
+                        index_neighbour = index
             
             if index_neighbour > 0:
                 table_1 = g_group_values + list(time_series_clustered[index_neighbour].values())
                 
-                measure_neighbour = compute_instant_value_loss(table=table_1)
+                measure_neighbour = instantValueLoss(table=table_1)
 
                 group_merge_neighbour = dict()
                 group_merge_neighbour.update(g_group)
@@ -165,20 +150,16 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                             g_group_copy_values = list(g_group_copy.values())
                             for key, time_series in other_group.items():
                                 if key not in g_group_copy.keys():
-                                    temp_measure = compute_instant_value_loss(table=g_group_copy_values + [time_series])
-
+                                    temp_measure = instantValueLoss(table=g_group_copy_values + [time_series])
                                     if temp_measure < round_measure:
                                         round_measure = temp_measure
                                         dict_to_add = { key : time_series }
-                            
                             g_group_copy.update(dict_to_add)
-
                         if round_measure < measure_other_group:
                             measure_other_group = round_measure
                             group_merge_other_group = g_group_copy
                             group_merge_remain = {key: value for (key, value) in other_group.items() if key not in g_group_copy.keys()}
                             index_other_group = index
-
             if measure_neighbour < measure_other_group:
                 newIndex.append(index_neighbour)
                 newGroup.append(group_merge_neighbour)
@@ -188,7 +169,6 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                 newGroup.append(group_merge_other_group)
                 newGroup.append(group_merge_remain)
                 newTree.append('')
-
             newIndex.append(index_group)
     
     time_series_clustered = [group for (index, group) in enumerate(time_series_clustered) if index not in newIndex]
@@ -278,11 +258,11 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                                     leaf_merge = Node(level=level, pattern_representation=pr, group=group, paa_value=paa_value)
 
                                 if leaf_merge.size >= p_value:
-                                    leaf_merge.label = "GL" # Good Leaf
+                                    leaf_merge.label = "G" # Good Leaf
                                     good_leaf_nodes.append(leaf_merge)
                                     bad_leaf_nodes_size -= leaf_merge.size
                                 else: 
-                                    leaf_merge.label = "BL" # Bad Leaf
+                                    leaf_merge.label = "B" # Bad Leaf
                                     bad_leaf_nodes_dict[current_level].append(leaf_merge)
 
                     temp_level = current_level-1
@@ -294,10 +274,9 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                             data_paa = paa(data_znorm, paa_value)
                             pr = ts_to_string(data_paa, cuts_for_asize(temp_level))
                         else:
-                            pr = "a"*paa_value
+                            pr = 'a' * paa_value
                         node.level = temp_level
                         node.pattern_representation = pr
-
                     if current_level > 0:
                         if temp_level not in bad_leaf_nodes_dict.keys():
                             bad_leaf_nodes_dict[temp_level] = bad_leaf_nodes_dict.pop(current_level)
@@ -306,7 +285,6 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                         current_level -= 1
                     else:
                         break 
-
             remaining_bad_leaf_nodes = list(bad_leaf_nodes_dict.values())[0]
             for node in remaining_bad_leaf_nodes:
                 suppressed_nodes.append(node)
