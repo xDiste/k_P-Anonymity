@@ -39,11 +39,11 @@ def maxValueLossTuple(fixed_tuple=None, time_series=None, key_fixed_tuple=None):
 # Find the group with minimum value loss
 def minValueLossGroup(group_to_search=None, group_to_merge=dict(), index_ignored=list()):
     p_group_min = {"index" : None, "group" : dict(), "vl" : float("inf")} 
-    for index, group in enumerate(group_to_search):
-        if index not in index_ignored: 
+    for count, group in enumerate(group_to_search):
+        if count not in index_ignored: 
             vl = instantValueLoss(list(group.values()) + list(group_to_merge.values()))
             if p_group_min["vl"] > vl:
-                p_group_min["index"] = index; p_group_min["group"] = group; p_group_min["vl"] = vl
+                p_group_min["index"] = count; p_group_min["group"] = group; p_group_min["vl"] = vl
     return p_group_min["group"], p_group_min["index"]
 
 
@@ -60,47 +60,47 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
         keys = list(time_series.keys())
         rounds = 3
 
-        # pick random tuple
-        random_tuple = keys[random.randint(0, len(keys) - 1)]
+        # Pick a random row
+        randomRow = keys[random.randint(0, len(keys) - 1)]
 
-        group_u = dict()
-        group_v = dict()
-        group_u[random_tuple] = time_series[random_tuple]
-
-        last_row = random_tuple
+        group_u = dict(); group_v = dict()
+        group_u[randomRow] = time_series[randomRow]
 
         for round in range(0, rounds*2 - 1): 
             if len(time_series) > 0:
                 if round % 2 == 0:
-                    v = maxValueLossTuple(group_u[last_row], time_series, last_row)
+                    v = maxValueLossTuple(group_u[randomRow], time_series, randomRow)
                     group_v.clear()
                     group_v[v] = time_series[v]
-                    last_row = v
+                    randomRow = v
                 else:
-                    u = maxValueLossTuple(group_v[last_row], time_series, last_row)
+                    u = maxValueLossTuple(group_v[randomRow], time_series, randomRow)
                     group_u.clear()
                     group_u[u] = time_series[u]
-                    last_row = u
+                    randomRow = u
 
-        # Now Assigned to group with lower uncertain penality
-        index_keys_time_series = [index for (index, key) in enumerate(time_series) if key not in [u, v]]
-        random.shuffle(index_keys_time_series)
+        time_series_keyIndex = list()
+        for (index, key) in enumerate(time_series):
+            if key not in [u, v]:
+                time_series_keyIndex.append(index)
 
-        # Add random row to group with lower NCP
-        keys = [list(time_series.keys())[x] for x in index_keys_time_series]
+        random.shuffle(time_series_keyIndex)    # I shuffle the indexes so that I don't always have the same result
+
+        keys = list()
+        for i in time_series_keyIndex:
+            keys.append(list(time_series.keys())[i])
         
         for key in keys:
-            row_temp = time_series[key]
+            tempRow = time_series[key]
             group_u_values = list(group_u.values()); group_v_values = list(group_v.values())
-            group_u_values.append(row_temp); group_v_values.append(row_temp)
+            group_u_values.append(tempRow); group_v_values.append(tempRow)
             
-            vl_u = instantValueLoss(group_u_values)
-            vl_v = instantValueLoss(group_v_values)
+            valueLoss_group_u = instantValueLoss(group_u_values); valueLoss_group_v = instantValueLoss(group_v_values)
 
-            if vl_v < vl_u:
-                group_v[key] = row_temp
+            if valueLoss_group_v < valueLoss_group_u:
+                group_v[key] = tempRow
             else:
-                group_u[key] = row_temp
+                group_u[key] = tempRow
             del time_series[key]
 
         if len(group_u) > k_value:
@@ -118,7 +118,6 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
 
 def postprocessing(time_series_clustered=None, k_value=None, time_series_postprocessed=None, tree=None):
     newIndex = list(); newGroup = list(); newTree = list()
-
     for index_group, g_group in enumerate(time_series_clustered):
         if len(g_group) < k_value:
             g_group_values = list(g_group.values())
@@ -131,9 +130,7 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
             
             if index_neighbour > 0:
                 table_1 = g_group_values + list(time_series_clustered[index_neighbour].values())
-                
                 measure_neighbour = instantValueLoss(table=table_1)
-
                 group_merge_neighbour = dict()
                 group_merge_neighbour.update(g_group)
                 group_merge_neighbour.update(time_series_clustered[index_neighbour])
@@ -148,6 +145,7 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                         for round in range(k_value - len(g_group)):
                             round_measure = float('inf')
                             g_group_copy_values = list(g_group_copy.values())
+
                             for key, time_series in other_group.items():
                                 if key not in g_group_copy.keys():
                                     temp_measure = instantValueLoss(table=g_group_copy_values + [time_series])
@@ -155,6 +153,7 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                                         round_measure = temp_measure
                                         dict_to_add = { key : time_series }
                             g_group_copy.update(dict_to_add)
+
                         if round_measure < measure_other_group:
                             measure_other_group = round_measure
                             group_merge_other_group = g_group_copy
@@ -171,21 +170,27 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                 newTree.append('')
             newIndex.append(index_group)
     
-    time_series_clustered = [group for (index, group) in enumerate(time_series_clustered) if index not in newIndex]
-    time_series_clustered += newGroup 
+    time_series_clustered_temp = list()
+    for (index, group) in enumerate(time_series_clustered):
+        if index not in newIndex:
+            time_series_clustered_temp.append(group)
+    time_series_clustered_temp += newGroup 
 
-    tree = [label for (index, label) in enumerate(tree) if index not in newIndex]
-    tree += newTree
+    treeTemp = list()
+    for (index, label) in enumerate(tree):
+        if index not in newIndex:
+            treeTemp.append(label)
+    treeTemp += newTree
 
     bad_group_count = 0
-    for index, group in enumerate(time_series_clustered):
+    for index, group in enumerate(time_series_clustered_temp):
         if len(group) < k_value:
             bad_group_count += 1
 
-    time_series_postprocessed += time_series_clustered
+    time_series_postprocessed += time_series_clustered_temp
     
     if bad_group_count > 0:
-        postprocessing(time_series_clustered=time_series_postprocessed, k_value=k_value, tree=tree)
+        postprocessing(time_series_clustered=time_series_postprocessed, k_value=k_value, tree=treeTemp)
 
 
 def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):

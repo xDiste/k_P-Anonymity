@@ -5,16 +5,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
+K = [7, 9, 11]; P = [5, 7, 9]; PAA = [2, 4, 6]
 
-K = [7]
-P = [5]
-PAA = [2]
+pathDataset = './Dataset/MLTollsStackOverflow.csv'
 
-pathDataset = './Dataset/Sales_Transaction_Dataset_Weekly_Final.csv'
-
-labels = list()
-kapra_time = list()
+labels = list(); kapra_time = list()
 min = float('inf')
+
 parameters = {'K' : 0, 'P' : 0, 'PAA' : 0}
 
 for k in K:
