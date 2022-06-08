@@ -37,14 +37,16 @@ def maxValueLossTuple(fixed_tuple=None, time_series=None, key_fixed_tuple=None):
 
 
 # Find the group with minimum value loss
-def minValueLossGroup(group_to_search=None, group_to_merge=dict(), index_ignored=list()):
-    p_group_min = {"index" : None, "group" : dict(), "vl" : float("inf")} 
-    for count, group in enumerate(group_to_search):
+def minValueLossGroup(group_to_find=None, group_to_merge=dict(), index_ignored=list()):
+    minGroup = dict()
+    minGroupIndex = None
+    minValueLoss = float("inf")
+    for count, group in enumerate(group_to_find):
         if count not in index_ignored: 
-            vl = instantValueLoss(list(group.values()) + list(group_to_merge.values()))
-            if p_group_min["vl"] > vl:
-                p_group_min["index"] = count; p_group_min["group"] = group; p_group_min["vl"] = vl
-    return p_group_min["group"], p_group_min["index"]
+            tmpValueLoss = instantValueLoss(list(group.values()) + list(group_to_merge.values()))
+            if minValueLoss > tmpValueLoss:
+                minGroupIndex = count; minGroup = group; minValueLoss = tmpValueLoss
+    return minGroup, minGroupIndex
 
 
 def top_down_clustering(time_series=None, k_value=None, time_series_clustered=None, algorithm=None, tree=None, label=''):
@@ -117,80 +119,85 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
 
 
 def postprocessing(time_series_clustered=None, k_value=None, time_series_postprocessed=None, tree=None):
-    newIndex = list(); newGroup = list(); newTree = list()
-    for index_group, g_group in enumerate(time_series_clustered):
-        if len(g_group) < k_value:
-            g_group_values = list(g_group.values())
-            label = tree[index_group]
-            index_neighbour = -1
-            measure_neighbour = float('inf') 
-            for index, label in enumerate(tree): 
-                    if label[:-1] == label[:-1] and index != index_group and index not in newIndex: 
-                        index_neighbour = index
+    indexes = list(); newGroup = list(); newTree = list()
+    for i, group in enumerate(time_series_clustered):
+        if len(group) < k_value:
+            groupValues = list(group.values())
+            label = tree[i]
+            neighbourIndex = -1
+            neighbourValueLoss = float('inf') 
+            for count, label in enumerate(tree): 
+                    if label[:-1] == label[:-1] and count != i and count not in indexes: 
+                        neighbourIndex = count
             
-            if index_neighbour > 0:
-                table_1 = g_group_values + list(time_series_clustered[index_neighbour].values())
-                measure_neighbour = instantValueLoss(table=table_1)
-                group_merge_neighbour = dict()
-                group_merge_neighbour.update(g_group)
-                group_merge_neighbour.update(time_series_clustered[index_neighbour])
+            neighbourGroup = dict()
+            if neighbourIndex > 0:
+                t = groupValues + list(time_series_clustered[neighbourIndex].values())
+                neighbourValueLoss = instantValueLoss(t)
+                neighbourGroup.update(group)
+                neighbourGroup.update(time_series_clustered[neighbourIndex])
 
-            measure_other_group = float('inf')   
-            for index, other_group in enumerate(time_series_clustered): 
+            otherGroupValueLoss = float('inf')   
+            for j, otherGroup in enumerate(time_series_clustered): 
                 # 2k - |G|
-                if len(other_group) >= 2*k_value - len(g_group):
-                    if index not in newIndex:
-                        g_group_copy = g_group.copy()
+                if len(otherGroup) >= (2*k_value - len(group)):
+                    if j not in indexes:
+                        groupCopy = group.copy()
                         # k - |G|
-                        for round in range(k_value - len(g_group)):
-                            round_measure = float('inf')
-                            g_group_copy_values = list(g_group_copy.values())
+                        for round in range(k_value - len(group)):
+                            roundValueLoss = float('inf')
+                            groupCopyValues = list(groupCopy.values())
+                            newDict = {}
+                            for key, time_series in otherGroup.items():
+                                if key not in groupCopy.keys():
+                                    tmpValueLoss = instantValueLoss(groupCopyValues + [time_series])
+                                    if tmpValueLoss < roundValueLoss:
+                                        roundValueLoss = tmpValueLoss
+                                        newDict = {key: time_series}
 
-                            for key, time_series in other_group.items():
-                                if key not in g_group_copy.keys():
-                                    temp_measure = instantValueLoss(table=g_group_copy_values + [time_series])
-                                    if temp_measure < round_measure:
-                                        round_measure = temp_measure
-                                        dict_to_add = { key : time_series }
-                            g_group_copy.update(dict_to_add)
+                            if len(newDict) != 0:
+                                groupCopy.update(newDict)
 
-                        if round_measure < measure_other_group:
-                            measure_other_group = round_measure
-                            group_merge_other_group = g_group_copy
-                            group_merge_remain = {key: value for (key, value) in other_group.items() if key not in g_group_copy.keys()}
-                            index_other_group = index
-            if measure_neighbour < measure_other_group:
-                newIndex.append(index_neighbour)
-                newGroup.append(group_merge_neighbour)
-                newTree.append(tree[index_neighbour][:-1])
-            else:
-                newIndex.append(index_other_group)
-                newGroup.append(group_merge_other_group)
-                newGroup.append(group_merge_remain)
+                        otherGroupIndex = -1
+                        if roundValueLoss < otherGroupValueLoss:
+                            otherGroupValueLoss = roundValueLoss
+                            remainGroup = dict()
+                            for (key, value) in otherGroup.items():
+                                if key not in groupCopy.keys():
+                                    remainGroup.update({key: value})
+                            otherGroupIndex = j
+
+            if neighbourValueLoss < otherGroupValueLoss:
+                indexes.append(neighbourIndex)
+                newGroup.append(neighbourGroup)
+                newTree.append(tree[neighbourIndex][:-1])
+            elif otherGroupIndex != -1:
+                indexes.append(otherGroupIndex)
+                newGroup.append(groupCopy)
+                newGroup.append(remainGroup)
                 newTree.append('')
-            newIndex.append(index_group)
+            indexes.append(i)
     
-    time_series_clustered_temp = list()
+    new_time_series_clustered = list()
     for (index, group) in enumerate(time_series_clustered):
-        if index not in newIndex:
-            time_series_clustered_temp.append(group)
-    time_series_clustered_temp += newGroup 
+        if index not in indexes:
+            new_time_series_clustered.append(group)
+    new_time_series_clustered += newGroup 
 
-    treeTemp = list()
+    tmpTree = list()
     for (index, label) in enumerate(tree):
-        if index not in newIndex:
-            treeTemp.append(label)
-    treeTemp += newTree
+        if index not in indexes:
+            tmpTree.append(label)
+    tmpTree += newTree
 
     bad_group_count = 0
-    for index, group in enumerate(time_series_clustered_temp):
+    for index, group in enumerate(new_time_series_clustered):
         if len(group) < k_value:
             bad_group_count += 1
-
-    time_series_postprocessed += time_series_clustered_temp
+    time_series_postprocessed += new_time_series_clustered
     
     if bad_group_count > 0:
-        postprocessing(time_series_clustered=time_series_postprocessed, k_value=k_value, tree=treeTemp)
+        postprocessing(time_series_clustered=time_series_postprocessed, k_value=k_value, tree=tmpTree)
 
 
 def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
@@ -341,12 +348,12 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         p_group_list_size = sum([len(group) for group in p_group_list])
         
         while p_group_list_size >= k_value:
-            k_group, index_min = minValueLossGroup(group_to_search=p_group_list, index_ignored=index_to_remove)
+            k_group, index_min = minValueLossGroup(group_to_find=p_group_list, index_ignored=index_to_remove)
             index_to_remove.append(index_min)
             p_group_list_size -= len(k_group)
 
             while len(k_group) < k_value:
-                group_to_add, index_group_to_add = minValueLossGroup(group_to_search=p_group_list, group_to_merge=k_group, index_ignored=index_to_remove)
+                group_to_add, index_group_to_add = minValueLossGroup(group_to_find=p_group_list, group_to_merge=k_group, index_ignored=index_to_remove)
                 index_to_remove.append(index_group_to_add)
                 k_group.update(group_to_add) 
                 p_group_list_size -= len(group_to_add)
@@ -355,7 +362,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         p_group_remaining = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove]
         
         for p_group in p_group_remaining:
-            k_group, index_k_group = minValueLossGroup(group_to_search=k_group_list, group_to_merge=p_group)
+            k_group, index_k_group = minValueLossGroup(group_to_find=k_group_list, group_to_merge=p_group)
             k_group_list.pop(index_k_group)
             k_group.update(p_group)
             k_group_list.append(k_group)
