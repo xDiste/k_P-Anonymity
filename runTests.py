@@ -5,7 +5,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-K = [7, 9, 11, 15]; P = [5, 7, 9, 11]; PAA = [2, 4, 6]
+K = [2, 3, 4, 5, 7]; P = [2, 3, 4, 6]; PAA = [2, 4, 6]
 
 pathDataset = './Dataset/MLTollsStackOverflow.csv'
 

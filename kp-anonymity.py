@@ -16,13 +16,13 @@ def instantValueLoss(table=None):
         for row in table:
             if row[index] < minRowTemp:
                 minRowTemp = row[index]
-            if row[index] > maxRowTemp:
+            elif row[index] > maxRowTemp:
                 maxRowTemp = row[index]
         maxRow.append(maxRowTemp); minRow.append(minRowTemp)
     valueLossSum = 0
     for index in range(0, len(table[0])):
         valueLossSum += pow((maxRow[index] - minRow[index]), 2)
-    return np.sqrt(valueLossSum/len(table[0])) * len(table)
+    return np.sqrt(valueLossSum/len(table[0]))
 
 
 # Find the tuple with maximum value loss
@@ -368,6 +368,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             k_group_list.append(k_group)
 
         dataset_anonymized = DatasetAnonymized()
+
         for group in k_group_list:
             # append group to anonymzed_data
             dataset_anonymized.anonymized_data.append(group)
