@@ -5,11 +5,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-K = [2, 3, 4, 5, 7]; P = [2, 3, 4, 6]; PAA = [2, 4, 6]
+K = [7, 8, 9, 11]; P = [5, 6, 7]; PAA = [3, 6, 11]
 
 pathDataset = './Dataset/MLTollsStackOverflow.csv'
 
-labels = list(); kapra_time = list()
+labels = list(); kapra_time = list(); IVLs = list()
 min = float('inf')
 
 parameters = {'K' : 0, 'P' : 0, 'PAA' : 0}
@@ -20,7 +20,7 @@ for k in K:
             continue
         for paa in PAA:
             start = time.time()
-            os.system(f'python3 ./kp-anonymity.py {k} {p} {paa} {pathDataset}')
+            os.system(f'python3 ./kp-anonymity.py {k} {p} {paa} {pathDataset} | grep "AAA" >> fileTmp.txt')
             stop = time.time()
             execTime = stop - start
             if min > execTime:
@@ -28,11 +28,11 @@ for k in K:
                 parameters['K'] = k; parameters['P'] = p; parameters['PAA'] = paa
             labels.append(f"K={k}\nP={p}\nPAA={paa}")
             kapra_time.append(execTime)
+            with open('fileTmp.txt', 'a') as f:
+                f.writelines(f'K={k} P={p} PAA={paa}\n\n\n')
 
 print(parameters)
 plt.figure(figsize=(25, 7))
 plt.bar(labels, kapra_time, width = 0.3)
 plt.ylabel("Execution Time(s) ")
 plt.savefig('graph.png')
-
-
