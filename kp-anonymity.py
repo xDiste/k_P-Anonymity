@@ -16,13 +16,13 @@ def instantValueLoss(table=None):
         for row in table:
             if row[index] < minRowTemp:
                 minRowTemp = row[index]
-            elif row[index] > maxRowTemp:
+            if row[index] > maxRowTemp:
                 maxRowTemp = row[index]
         maxRow.append(maxRowTemp); minRow.append(minRowTemp)
     valueLossSum = 0
-    for index in range(0, len(table[0])):
+    for index in range(0, len(maxRow)):
         valueLossSum += pow((maxRow[index] - minRow[index]), 2)
-    return np.sqrt(valueLossSum/len(table[0]))
+    return np.sqrt(valueLossSum/len(table[0])) * len(table)
 
 
 # Find the tuple with maximum value loss
@@ -281,6 +281,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                     for node in bad_leaf_nodes_dict[current_level]:
                         if temp_level > 1:
                             values_group = list(node.group.values())
+                            # To reduce dimensionality
                             data = np.array(values_group[0])
                             data_znorm = znorm(data)
                             data_paa = paa(data_znorm, paa_value)
@@ -323,7 +324,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                 
                 # start top down clustering
                 top_down_clustering(time_series=p_group_to_split, k_value=p_value, time_series_clustered=p_group_splitted, tree=tree)
-                
+
                 # Postprocessing
                 time_series_k_anonymized_postprocessed = list()
                 postprocessing(time_series_clustered=p_group_splitted, k_value=p_value, time_series_postprocessed=time_series_k_anonymized_postprocessed, tree=tree)
@@ -368,7 +369,6 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             k_group_list.append(k_group)
 
         dataset_anonymized = DatasetAnonymized()
-
         for group in k_group_list:
             # append group to anonymzed_data
             dataset_anonymized.anonymized_data.append(group)
