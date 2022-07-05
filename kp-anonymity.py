@@ -18,7 +18,8 @@ def instantValueLoss(table=None):
                 minRowTemp = row[index]
             if row[index] > maxRowTemp:
                 maxRowTemp = row[index]
-        maxRow.append(maxRowTemp); minRow.append(minRowTemp)
+        if minRowTemp != float('inf'):
+            maxRow.append(maxRowTemp); minRow.append(minRowTemp)
     valueLossSum = 0
     for index in range(0, len(maxRow)):
         valueLossSum += pow((maxRow[index] - minRow[index]), 2)
@@ -368,6 +369,10 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             k_group.update(p_group)
             k_group_list.append(k_group)
 
+        VL_TOT = 0
+        for d in k_group_list:
+            VL_TOT += instantValueLoss(list(d.values()))
+        print("IVL", VL_TOT)
         dataset_anonymized = DatasetAnonymized()
         for group in k_group_list:
             # append group to anonymzed_data
