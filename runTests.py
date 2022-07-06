@@ -52,10 +52,10 @@ print("IVL:", labels[minLindex].strip(), minVL)
 plt.figure(figsize=(25, 7))
 plt.bar(labels, kapra_time, width = 0.3)
 plt.ylabel("Execution Time(s) ")
-plt.savefig('graph.png')
+plt.savefig('./Output/graphExecutionTime.png')
 
 plt.figure(figsize=(25, 7))
 plt.bar(labels, IVLs, width=0.3)
 plt.ylabel("Instan Value Loss ")
-plt.savefig('graph2.png')
+plt.savefig('./Output/graphInstantValueLoss.png')
 

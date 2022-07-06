@@ -9,22 +9,21 @@ from dataset_anonymized import DatasetAnonymized
 
 max_level = 4
 
-def instantValueLoss(table=None):
-    maxRow = list(); minRow = list()
-    for index in range(0, len(table[0])):
-        maxRowTemp = 0; minRowTemp = float('inf')
-        for row in table:
-            if row[index] < minRowTemp:
-                minRowTemp = row[index]
-            if row[index] > maxRowTemp:
-                maxRowTemp = row[index]
-        if minRowTemp != float('inf'):
-            maxRow.append(maxRowTemp); minRow.append(minRowTemp)
-    valueLossSum = 0
-    for index in range(0, len(maxRow)):
-        valueLossSum += pow((maxRow[index] - minRow[index]), 2)
-    return np.sqrt(valueLossSum/len(table[0])) * len(table)
-
+def instantValueLoss(table=None):	
+    maxRow = list(); minRow = list()	
+    for index in range(0, len(table[0])):	
+        maxRowTemp = 0; minRowTemp = float('inf')	
+        for row in table:	
+            if row[index] < minRowTemp:	
+                minRowTemp = row[index]	
+            if row[index] > maxRowTemp:	
+                maxRowTemp = row[index]	
+        if minRowTemp != float('inf'):	
+            maxRow.append(maxRowTemp); minRow.append(minRowTemp)	
+    valueLossSum = 0	
+    for i in range(0, len(maxRow)):	
+        valueLossSum += (pow((maxRow[i] - minRow[i]), 2) / len(maxRow))	
+    return np.sqrt(valueLossSum)
 
 # Find the tuple with maximum value loss
 def maxValueLossTuple(fixed_tuple=None, time_series=None, key_fixed_tuple=None):
@@ -138,7 +137,7 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                 neighbourGroup.update(group)
                 neighbourGroup.update(time_series_clustered[neighbourIndex])
 
-            otherGroupValueLoss = float('inf')   
+            otherGroupValueLoss = float('inf'); otherGroupIndex = -1 
             for j, otherGroup in enumerate(time_series_clustered): 
                 # 2k - |G|
                 if len(otherGroup) >= (2*k_value - len(group)):
@@ -159,7 +158,6 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
                             if len(newDict) != 0:
                                 groupCopy.update(newDict)
 
-                        otherGroupIndex = -1
                         if roundValueLoss < otherGroupValueLoss:
                             otherGroupValueLoss = roundValueLoss
                             remainGroup = dict()
