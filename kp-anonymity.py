@@ -14,16 +14,17 @@ def instantValueLoss(table=None):
     for index in range(0, len(table[0])):	
         maxRowTemp = 0; minRowTemp = float('inf')	
         for row in table:	
-            if row[index] < minRowTemp:	
+            if row[index] <= minRowTemp:	
                 minRowTemp = row[index]	
-            if row[index] > maxRowTemp:	
-                maxRowTemp = row[index]	
-        if minRowTemp != float('inf'):	
-            maxRow.append(maxRowTemp); minRow.append(minRowTemp)	
-    valueLossSum = 0	
+            elif row[index] >= maxRowTemp:	
+                maxRowTemp = row[index]
+        if minRowTemp != float('inf'):
+            maxRow.append(maxRowTemp); minRow.append(minRowTemp)
+    valueLossSum = 0
     for i in range(0, len(maxRow)):	
-        valueLossSum += (pow((maxRow[i] - minRow[i]), 2) / len(maxRow))	
+        valueLossSum += (pow((maxRow[i] - minRow[i]), 2)) / len(maxRow)
     return np.sqrt(valueLossSum)
+
 
 # Find the tuple with maximum value loss
 def maxValueLossTuple(fixed_tuple=None, time_series=None, key_fixed_tuple=None):
@@ -49,7 +50,7 @@ def minValueLossGroup(group_to_find=None, group_to_merge=dict(), index_ignored=l
     return minGroup, minGroupIndex
 
 
-def top_down_clustering(time_series=None, k_value=None, time_series_clustered=None, algorithm=None, tree=None, label=''):
+def top_down_clustering(time_series=None, k_value=None, time_series_clustered=list(), algorithm=None, tree=None, label=''):
     """
     k-anonymity based on work of Xu et al. 2006,
     Utility-Based Anonymization for Privacy Preservation with Less Information Loss
@@ -118,17 +119,17 @@ def top_down_clustering(time_series=None, k_value=None, time_series_clustered=No
             tree.append(label)
 
 
-def postprocessing(time_series_clustered=None, k_value=None, time_series_postprocessed=None, tree=None):
+def postprocessing(time_series_clustered=list(), k_value=None, time_series_postprocessed=list(), tree=None):
     indexes = list(); newGroup = list(); newTree = list()
     for i, group in enumerate(time_series_clustered):
         if len(group) < k_value:
             groupValues = list(group.values())
-            label = tree[i]
+            groupLabel = tree[i % len(tree)]
             neighbourIndex = -1
             neighbourValueLoss = float('inf') 
-            for count, label in enumerate(tree): 
-                    if label[:-1] == label[:-1] and count != i and count not in indexes: 
-                        neighbourIndex = count
+            for count, label in enumerate(tree):
+                if label[:-1] == groupLabel[:-1] and count != i and count not in indexes: 
+                    neighbourIndex = count
             
             neighbourGroup = dict()
             if neighbourIndex > 0:
@@ -193,7 +194,7 @@ def postprocessing(time_series_clustered=None, k_value=None, time_series_postpro
     for index, group in enumerate(new_time_series_clustered):
         if len(group) < k_value:
             bad_group_count += 1
-    time_series_postprocessed += new_time_series_clustered
+    time_series_postprocessed += new_time_series_clustered  # A volte non riesce a fare questa operazione "NoneType + list"
     
     if bad_group_count > 0:
         postprocessing(time_series_clustered=time_series_postprocessed, k_value=k_value, tree=tmpTree)
@@ -351,14 +352,17 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             k_group, index_min = minValueLossGroup(group_to_find=p_group_list, index_ignored=index_to_remove)
             index_to_remove.append(index_min)
             p_group_list_size -= len(k_group)
-
+            
+            # A volte non esce da questo while perché group_to_add ha lunghezza 0
             while len(k_group) < k_value:
                 group_to_add, index_group_to_add = minValueLossGroup(group_to_find=p_group_list, group_to_merge=k_group, index_ignored=index_to_remove)
+                if len(group_to_add) == 0:
+                    break
                 index_to_remove.append(index_group_to_add)
                 k_group.update(group_to_add) 
                 p_group_list_size -= len(group_to_add)
             k_group_list.append(k_group)   
-        
+
         p_group_remaining = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove]
         
         for p_group in p_group_remaining:

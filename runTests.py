@@ -19,6 +19,7 @@ for k in K:
         if p >= k:
             continue
         for paa in PAA:
+            print("ITERAZIONE: ",k, p, paa)
             start = time.time()
             os.system(f'python3 ./kp-anonymity.py {k} {p} {paa} {pathDataset} | grep IVL >> fileTmp.txt')
             stop = time.time()
@@ -47,6 +48,7 @@ for i in range(0, len(lines)):
         minLindex = i
 
 print("Time:", parameters)
+print("INDEX", minLindex)
 print("IVL:", labels[minLindex].strip(), minVL)
 
 plt.figure(figsize=(25, 7))
