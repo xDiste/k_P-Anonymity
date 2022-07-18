@@ -194,7 +194,7 @@ def postprocessing(time_series_clustered=list(), k_value=None, time_series_postp
     for index, group in enumerate(new_time_series_clustered):
         if len(group) < k_value:
             bad_group_count += 1
-    time_series_postprocessed += new_time_series_clustered  # A volte non riesce a fare questa operazione "NoneType + list"
+    time_series_postprocessed += new_time_series_clustered 
     
     if bad_group_count > 0:
         postprocessing(time_series_clustered=time_series_postprocessed, k_value=k_value, tree=tmpTree)
