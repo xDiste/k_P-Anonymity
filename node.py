@@ -35,18 +35,22 @@ class Node:
         :return:
         """
         # logger.info("good_leaf_nodes: {}, bad_leaf_nodes: {}".format(len(good_leaf_nodes), len(bad_leaf_nodes)))
+
+        # Size of the node is < P
         if self.size < p_value:
             logger.info("size:{}, p_value:{} == bad-leaf".format(self.size, p_value))
             self.label = "bad-leaf"
             bad_leaf_nodes.append(self)
             return
 
+        # Size of the node is == max_level
         if self.level == max_level:
             logger.info("size:{}, p_value:{} == good-leaf".format(self.size, p_value))
             self.label = "good-leaf"
             good_leaf_nodes.append(self)
             return
 
+        # Size of the node is > P and < 2*P: maximize level without node splitting
         if p_value <= self.size < 2*p_value:
             logger.info("Maximize-level, size:{}, p_value:{} == good-leaf".format(self.size, p_value))
             self.maximize_level_node(max_level)
@@ -81,11 +85,13 @@ class Node:
         good_leaf = np.all(np.array(length_all_tentative_child) < p_value)
 
         if good_leaf:
+            # If N cannot be split
             logger.info("Good-leaf, all_tentative_child are < {}".format(p_value))
             self.label = "good-leaf"
             good_leaf_nodes.append(self)
             return
         else:
+            # N can be split
             logger.info("N can be split")
             logger.info("Compute tentative good nodes and tentative bad nodes")
             # tentative good nodes
@@ -122,6 +128,7 @@ class Node:
                 total_size_tb_nodes += len(tb_node)
 
             if total_size_tb_nodes >= p_value:
+                # Merge all bad nodes in a single node and label it as good-leaf
                 logger.info("Merge all bad nodes in a single node, and label it as good-leaf")
                 child_merge_node_group = dict()
                 for tb_node in tb_nodes:
@@ -135,12 +142,14 @@ class Node:
                 nc = len(tg_nodes) + len(tb_nodes)
                 logger.info("Split only tg_nodes {0}".format(len(tg_nodes)))
                 if nc >= 2:
+                    # Split and invoke recursively the node splitting procedure
                     for index in range(0, len(tg_nodes)):
                         node = Node(level=self.level, pattern_representation=pattern_representation_tg[index],
                                     label="intermediate", group=tg_nodes[index], parent=self)
                         self.child_node.append(node)
                         node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
                 else:
+                    # Split without calling the node splitting procedure
                     for index in range(0, len(tg_nodes)):
                         node = Node(level=self.level, pattern_representation=pattern_representation_tg[index],
                                     label="good-leaf", group=tg_nodes[index], parent=self)
@@ -209,21 +218,29 @@ class Node:
         values_group = list(self.group.values())
         original_level = self.level
         equal = True
+
+        # Try to maximize the level computing the ts_to_string of the new level 
+        # and compare it with the old one for each element in group
         while equal and self.level < max_level:
             temp_level = self.level + 1
             data = np.array(values_group[0])
             data_znorm = znorm(data)
             data_paa = paa(data_znorm, self.paa_value)
             pr = ts_to_string(data_paa, cuts_for_asize(temp_level))
+
+            # Compare pr for each element (first one already checked, because the initial pr is its)
             for index in range(1, len(values_group)):
                 data = np.array(values_group[index])
                 data_znorm = znorm(data)
                 data_paa = paa(data_znorm, self.paa_value)
                 pr_2 = ts_to_string(data_paa, cuts_for_asize(temp_level))
-                if pr_2 != pr:
+                if pr_2 != pr:  # comparing new pr with the pr of original level
                     equal = False
-            if equal:
+
+            if equal:   # need to try another level or already at the max?
                 self.level = temp_level
+        
+        # Check if something changes
         if original_level != self.level:
             logger.info("New level for node: {}".format(self.level))
             data = np.array(values_group[0])

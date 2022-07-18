@@ -238,7 +238,10 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             if bad_leaf_nodes_size >= p_value:
                 current_level = max(bad_leaf_nodes_dict.keys())
 
+                # While sum of all bad leaves' size >= P
                 while bad_leaf_nodes_size >= p_value:
+
+                    # Check if ant bad leaves can merge
                     if current_level in bad_leaf_nodes_dict.keys():
                         merge_dict = dict()
                         keys_to_be_removed = list()
@@ -254,6 +257,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                                 merge_dict[pr_node] = [current_level_node]
                                 keys_to_be_removed.append(pr_node)
                         
+                        # If they can merge, merge them to a new node: leaf_merge
                         if merge:
                             for k in keys_to_be_removed:
                                 del merge_dict[k]
@@ -269,6 +273,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                                     level = 1
                                     leaf_merge = Node(level=level, pattern_representation=pr, group=group, paa_value=paa_value)
 
+                                # Based on the leaf_merge.size assign good leaf or bad leag
                                 if leaf_merge.size >= p_value:
                                     leaf_merge.label = "G" # Good Leaf
                                     good_leaf_nodes.append(leaf_merge)
@@ -342,19 +347,21 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
             if len(group) >= k_value:
                 index_to_remove.append(index)
                 k_group_list.append(group)
-        
+
+        # Add it into GL and remove from PGL
         p_group_list = [group for (index, group) in enumerate(p_group_list) if index not in index_to_remove]
 
         index_to_remove = list()
         p_group_list_size = sum([len(group) for group in p_group_list])
         
         while p_group_list_size >= k_value:
+            # Find S1 and G = S1
             k_group, index_min = minValueLossGroup(group_to_find=p_group_list, index_ignored=index_to_remove)
             index_to_remove.append(index_min)
             p_group_list_size -= len(k_group)
             
-            # A volte non esce da questo while perché group_to_add ha lunghezza 0
             while len(k_group) < k_value:
+                # Find Smin and add Smin into G
                 group_to_add, index_group_to_add = minValueLossGroup(group_to_find=p_group_list, group_to_merge=k_group, index_ignored=index_to_remove)
                 if len(group_to_add) == 0:
                     break
