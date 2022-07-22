@@ -271,7 +271,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
                                     level = current_level
                                 else:
                                     level = 1
-                                    leaf_merge = Node(level=level, pattern_representation=pr, group=group, paa_value=paa_value)
+                                leaf_merge = Node(level=level, pattern_representation=pr, group=group, paa_value=paa_value)
 
                                 # Based on the leaf_merge.size assign good leaf or bad leag
                                 if leaf_merge.size >= p_value:
