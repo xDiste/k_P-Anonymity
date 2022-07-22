@@ -77,14 +77,6 @@ def instant_value_loss(groupList):
     return np.sqrt(valueLossSum)
 
 
-def group_with_minimum_instant_value_loss(group):
-    p_group_min = dict()
-    vl_tmp = float('inf')
-    for g in group: 
-        vl = compute_instant_value_loss(list(group.values()))
-        if vl < vl_tmp:
-            p_group_min = g; vl_tmp = vl
-    return p_group_min
 
 
 def groupFormation(good_leaf_nodes, k_value, p_value):
