@@ -14,6 +14,9 @@ min = float('inf')
 
 parameters = {'K' : 0, 'P' : 0, 'PAA' : 0}
 
+# Try different value for K and P, skipping case: P >= K
+# Save execution time
+# Save result appending IVL to a fileTmp
 for k in K:
     for p in P:
         if p >= k:
@@ -30,6 +33,8 @@ for k in K:
             labels.append(f"K={k}\nP={p}\nPAA={paa}")
             kapra_time.append(execTime)
 
+
+# Read fileTmp with result previously saved inside
 lines = []
 
 with open('fileTmp.txt', 'r') as f:
@@ -38,15 +43,17 @@ with open('fileTmp.txt', 'r') as f:
 os.system('rm ./fileTmp.txt')
 
 for i in range(0, len(lines)):
-    IVLs.append(float(lines[i].split('IVL')[1].strip()))
+    IVLs.append(float(lines[i].split('IVL')[1].strip()))    # to chart purpose
 
 minVL = float('inf'); minLindex = -1
 
+# Find minimum value
 for i in range(0, len(lines)):
     if float(lines[i].split('IVL')[1].strip()) < minVL:
         minVL = float(lines[i].split('IVL')[1].strip())
         minLindex = i
 
+# Print and plot output
 print("Time:", parameters)
 print("INDEX", minLindex)
 print("IVL:", labels[minLindex].strip(), minVL)
