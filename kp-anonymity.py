@@ -57,12 +57,42 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_values):
         current_level -= 1
 
 
+def top_down_clustering(p_subgroup, k_value, p_value):
+
+
+def instant_value_loss(groupList):
+    upperBoundList = list(); lowerBoundList = list()
+    for i in range(0, len(groupList)):
+        for j in range(0, len(groupList[i])):
+            tmpLow = float('inf'); tmpMax = 0
+            if groupList[i] > tmpMax:
+                tmpMax = groupList[i]
+            elif groupList[i] < tmpLow:
+                tmpLow = groupList[i]
+        upperBoundList.append(tmpMax)
+        lowerBoundList.append(tmpLow)
+    valueLossSum = 0	
+    for i in range(0, len(groupList)):	
+        valueLossSum += (pow((upperBoundList[i] - lowerBoundList[i]), 2) / len(groupList))	
+    return np.sqrt(valueLossSum)
+
+
+def group_with_minimum_instant_value_loss(group):
+    p_group_min = dict()
+    vl_tmp = float('inf')
+    for g in group: 
+        vl = compute_instant_value_loss(list(group.values()))
+        if vl < vl_tmp:
+            p_group_min = g; vl_tmp = vl
+    return p_group_min
+
+
 def groupFormation(good_leaf_nodes, k_value, p_value):
     '''
     for each P-subgroup that size >= 2*P do
         Split it by top-down clustering
     if any P-subgroup that size >= k then:
-        add it into GL and remove it from PGL
+        add it into GL and remove it from PGL (p_subgroup)
     while |PGL| >= k do
         find s1 and G = s1
         while |G| < k do
@@ -77,6 +107,34 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
 
     while len(p_subgroup) >= 2 * p_value:
         top_down_clustering(p_subgroup, k_value, p_value)
+    
+    GL_list = list(); group_to_remove = list()
+    for i, group in p_subgroup:
+        if group.size >= k_value:
+            GL_list.append(group)
+            group_to_remove.append(group)
+    
+    tmp_p_subgroup = list()
+    for i, group in p_subgroup:
+        for group not in group_to_remove:
+            tmp_p_subgroup.append(group)
+
+    p_subgroup = tmp_p_subgroup
+
+    while len(p_subgroup) >= k_value:
+        s1 = group_with_minimum_instant_value_loss(p_subgroup)
+        while len(s1) < k_value:
+            s_min = group_with_minimum_instant_value_loss(p_group + s1)
+        
+        tmp_p_subgroup = list()
+        for i, group in p_subgroup:
+            for group not in s1:
+                tmp_p_subgroup.append(group)
+
+        p_subgroup = tmp_p_subgroup
+    
+    for group in p_subgroup:
+        s1 = minimum_instant_value_loss(p_subgroup)
 
 
 def main_KAPRA(k_value=None, p_value=None, paa_value=None dataset_path=None):
@@ -112,6 +170,24 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None dataset_path=None):
 
         # Group formation phase
         groupFormation(good_leaf_nodes, k_value, p_value)
+
+        # Save all (to check if it's right)
+        dataset_anonymized = DatasetAnonymized()
+        for group in time_series_k_anonymized:
+            dataset_anonymized.anonymized_data.append(group)
+
+            good_leaf_nodes = list()
+            bad_leaf_nodes = list()
+
+            node = Node(level=1, group=group, paa_value=paa_value)
+            node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
+
+            if len(bad_leaf_nodes) > 0:
+                Node.postprocessing(good_leaf_nodes, bad_leaf_nodes)
+                
+            dataset_anonymized.pattern_anonymized_data.append(good_leaf_nodes)
+        dataset_anonymized.compute_anonymized_data()
+        dataset_anonymized.save_on_file("./Output/kapra_output.csv")
 
 
 if __name__ == "__main__":
