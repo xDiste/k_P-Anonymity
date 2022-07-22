@@ -38,7 +38,6 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_values):
         for bad_node in bad_leaf_nodes:
             patternRappresentation = bad_node.pattern_representation
             nodeInCurrentLevel[patternRappresentation].append(bad_node) 
-
         # now merge all
         for pr, nodeList in nodeInCurrentLevel.items():
             group = dict()
@@ -56,6 +55,29 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_values):
                 leaf_merge.label = "B"
                 bad_leaf_nodes.append(leaf_merge)
         current_level -= 1
+
+
+def groupFormation(good_leaf_nodes, k_value, p_value):
+    '''
+    for each P-subgroup that size >= 2*P do
+        Split it by top-down clustering
+    if any P-subgroup that size >= k then:
+        add it into GL and remove it from PGL
+    while |PGL| >= k do
+        find s1 and G = s1
+        while |G| < k do
+            find s_min and add s_min into G
+        Remove all P-subgroup in G from PGL and put G in GL
+    for each remaining P-subgroup s' do
+        Find corrisponding G' and add s' into G'
+    '''
+    p_subgroup = list()
+    for node in good_leaf_nodes:
+        p_subgroup.append(node)
+
+    while len(p_subgroup) >= 2 * p_value:
+        top_down_clustering(p_subgroup, k_value, p_value)
+
 
 def main_KAPRA(k_value=None, p_value=None, paa_value=None dataset_path=None):
     if os.path.isfile(dataset_path):
@@ -89,6 +111,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None dataset_path=None):
         recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_values)
 
         # Group formation phase
+        groupFormation(good_leaf_nodes, k_value, p_value)
 
 
 if __name__ == "__main__":
