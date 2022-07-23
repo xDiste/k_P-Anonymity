@@ -95,20 +95,16 @@ def top_down_clustering(p_subgroup, k_value, p_value):
 
 
 def instant_value_loss(groupList):
-    upperBoundList = list(); lowerBoundList = list()
-    for i in range(0, len(groupList)):
-        for j in range(0, len(groupList[i])):
-            tmpLow = float('inf'); tmpMax = 0
-            if groupList[i] > tmpMax:
-                tmpMax = groupList[i]
-            elif groupList[i] < tmpLow:
-                tmpLow = groupList[i]
-        upperBoundList.append(tmpMax)
-        lowerBoundList.append(tmpLow)
-    valueLossSum = 0	
-    for i in range(0, len(groupList)):	
-        valueLossSum += (pow((upperBoundList[i] - lowerBoundList[i]), 2) / len(groupList))	
-    return np.sqrt(valueLossSum)
+    summation = 0
+    for row in range(0, len(groupList)):
+        r_lower = float('inf'); r_upper = 0
+        for column in range(0, len(groupList[row])):
+            if groupList[row][column] > r_upper:
+                r_upper = groupList[row][column]
+            if groupList[row][column] < r_lower:
+                r_lower = groupList[row][column]
+        summation += ((pow(r_upper - r_lower), 2) / len(groupList))
+    return np.sqrt(summation)
 
 
 def group_with_minimum_instant_value_loss(group):
@@ -117,7 +113,8 @@ def group_with_minimum_instant_value_loss(group):
     for g in group: 
         vl = compute_instant_value_loss(list(group.values()))
         if vl < vl_tmp:
-            p_group_min = g; vl_tmp = vl
+            p_group_min = g
+            vl_tmp = vl
     return p_group_min
 
 
@@ -268,7 +265,7 @@ if __name__ == "__main__":
         if k_value > p_value:
             main_KAPRA(k_value=k_value, p_value=p_value, paa_value=paa_value, dataset_path=dataset_path)
         else:
-            print("[*] Usage: python3 ./kp-anonymity.py k_value p_value dataset.csv")
+            print("[*] Usage: python3 ./kp-anonymity.py k_value p_value paa_value dataset.csv")
             print("[*] k_value should be greater than p_value")
     else:
-        print("[*] Usage: python3 ./kp-anonymity.py k_value p_value dataset.csv")
+        print("[*] Usage: python3 ./kp-anonymity.py k_value p_value paa_value dataset.csv")
