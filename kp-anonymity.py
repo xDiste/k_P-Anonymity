@@ -7,57 +7,91 @@ from node import Node
 from dataset_anonymized import DatasetAnonymized
 
 
-def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_values):
+def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
     '''
-    while sum of all bad leaves' size >= P:
-        if any bad leaves can merge then:
-            merge them to a new node leaf-merge;
-            if leaf-merge.size >= P then:
-                leaf-merge.label = good-leaf
-            else
-                leaf-merge.label = bad-leaf
-        current-level--
-    suppress all time series contained in bad leaves
+    1) current-level = max-bad-level
+    2) while sum of all bad leaves' size >= P:
+    3)      if any bad leaves can merge then:
+    4)          merge them to a new node leaf-merge;
+    5)          if leaf-merge.size >= P then:
+    6)              leaf-merge.label = good-leaf
+    7)          else
+    8)              leaf-merge.label = bad-leaf
+    9)      current-level--
+    10) suppress all time series contained in bad leaves
+    NB: Bad leaves can mearge means that a BL1 and BL2 (nodes in bad_leaf_nodes) have same level and same pattern rappresentation
     '''
-    # Bad leaves can mearge means that a BL1 and BL2 (nodes in bad_leaf_nodes) have same level and same pattern rappresentation
 
-    # I have to find the max-bad-level
-    max_bad_level = 0
-    for bad_node in bad_leaf_nodes:
-        bad_node.level > max_bad_level:
-        max_bad_level = bad_node.level
+    '''
+    1) current-level = max-bad-level
+    '''
+    current_level = max([bad_node.level for bad_node in bad_leaf_nodes])
 
-    current_level = max_bad_level
+    '''
+    2) while sum of all bad leaves' size >= P:
+    Check on current_level > 0 to avoid errors
+    '''
+    while sum([bad_node.size for bad_node in bad_leaf_nodes]) >= p_value and current_level > 0:
 
-    all_bad_leaves_size = 0
-    for bad_node in bad_leaf_nodes:
-        all_bad_leaves_size += bad_node.size
-
-    while all_bad_leaves_size >= p_value:
-        nodeInCurrentLevel = dict() # node: PR and level is the current level
+        '''
+        3) if any bad leaves can merge then:
+        Select nodes with current level and save a Map of <pr, node>
+        '''
+        nodeInCurrentLevel = dict()
         for bad_node in bad_leaf_nodes:
-            patternRappresentation = bad_node.pattern_representation
-            nodeInCurrentLevel[patternRappresentation].append(bad_node) 
-        # now merge all
+            if bad_node.level == current_level:
+                patternRappresentation = bad_node.pattern_representation
+                nodeInCurrentLevel[patternRappresentation].append(bad_node) 
+        
+        '''
+        4) merge them to a new node leaf-merge;
+        '''
         for pr, nodeList in nodeInCurrentLevel.items():
             group = dict()
             for node in nodeList:
                 bad_leaf_nodes.remove(node)
                 group.update(node.group)
-
             leaf_merge = Node(level=current_level, pattern_representation=pr, group=group, paa_value=paa_value)
 
+            '''
+            5) if leaf-merge.size >= P then:
+            '''
             if leaf_merge.size >= p_value:
+                '''
+                6) leaf-merge.label = good-leaf
+                '''
                 leaf_merge.label = "G"
                 good_leaf_nodes.append(leaf_merge)
-                all_bad_leaves_size -= leaf_merge.size
-            else
+            else:
+                '''
+                8) leaf-merge.label = bad-leaf
+                '''
                 leaf_merge.label = "B"
                 bad_leaf_nodes.append(leaf_merge)
+
+        '''
+        9) current-level--
+        Decrease the level of all the bad-leaves
+        '''
+        for bad_node in bad_leaf_nodes:
+            if bad_node.level == current_level:
+                values_group = list(bad_node.group.values())
+                data = np.array(values_group[0])
+                data_znorm = znorm(data)
+                data_paa = paa(data_znorm, paa_value)
+                pr = ts_to_string(data_paa, cuts_for_asize(current_level-1)) if current_level-1 > 1 else 'a' * paa_value
+                bad_node.level = current_level-1
+                bad_node.pattern_representation = pr
         current_level -= 1
+
+    '''
+    10) suppress all time series contained in bad leaves
+    '''
+    bad_leaf_nodes = list()
 
 
 def top_down_clustering(p_subgroup, k_value, p_value):
+    return
 
 
 def instant_value_loss(groupList):
@@ -89,51 +123,86 @@ def group_with_minimum_instant_value_loss(group):
 
 def groupFormation(good_leaf_nodes, k_value, p_value):
     '''
-    for each P-subgroup that size >= 2*P do
-        Split it by top-down clustering
-    if any P-subgroup that size >= k then:
-        add it into GL and remove it from PGL (p_subgroup)
-    while |PGL| >= k do
-        find s1 and G = s1
-        while |G| < k do
-            find s_min and add s_min into G
-        Remove all P-subgroup in G from PGL and put G in GL
-    for each remaining P-subgroup s' do
-        Find corrisponding G' and add s' into G'
+    1) for each P-subgroup that size >= 2*P do
+    2)      Split it by top-down clustering
+    3) if any P-subgroup that size >= k then:
+    4)      add it into GL and remove it from PGL
+    5) while |PGL| >= k do
+    6)      find s1 and G = s1
+    7)      while |G| < k do
+    8)          find s_min and add s_min into G
+    9)      Remove all P-subgroup in G from PGL and put G in GL
+    10) for each remaining P-subgroup s' do
+    11)     Find corrisponding G' and add s' into G'
     '''
+
+    '''
+    0) Init
+    '''
+    # Create P-subgroup
     p_subgroup = list()
     for node in good_leaf_nodes:
         p_subgroup.append(node)
 
+    # Init variables
+    GL_list = list();
+    tmp_p_subgroup = list()
+
+    '''
+    1) for each P-subgroup that size >= 2*P do
+    '''
     while len(p_subgroup) >= 2 * p_value:
+        '''
+        2) Split it by top-down clustering
+        '''
         top_down_clustering(p_subgroup, k_value, p_value)
     
-    GL_list = list(); group_to_remove = list()
-    for i, group in p_subgroup:
-        if group.size >= k_value:
-            GL_list.append(group)
-            group_to_remove.append(group)
-    
-    tmp_p_subgroup = list()
-    for i, group in p_subgroup:
-        for group not in group_to_remove:
-            tmp_p_subgroup.append(group)
-
-    p_subgroup = tmp_p_subgroup
-
-    while len(p_subgroup) >= k_value:
-        s1 = group_with_minimum_instant_value_loss(p_subgroup)
-        while len(s1) < k_value:
-            s_min = group_with_minimum_instant_value_loss(p_group + s1)
-        
-        tmp_p_subgroup = list()
-        for i, group in p_subgroup:
-            for group not in s1:
-                tmp_p_subgroup.append(group)
-
-        p_subgroup = tmp_p_subgroup
-    
+    '''
+    3) if any P-subgroup that size >= k then:
+    '''
     for group in p_subgroup:
+        if group.size >= k_value:
+            '''
+            4) add it into GL and remove it from PGL (p_subgroup)
+            '''
+            GL_list.append(group)
+            p_subgroup.remove(group)
+    
+    '''
+    5) while |PGL| >= k do
+    '''
+    while len(p_subgroup) >= k_value:
+        '''
+        6) find s1 and G = s1
+        '''
+        # TODO: Check
+        G = group_with_minimum_instant_value_loss(p_subgroup)
+
+        '''
+        7) while |G| < k do
+        '''
+        while len(s1) < k_value:
+            '''
+            8) find s_min and add s_min into G
+            '''
+            # TODO: Check
+            G.append(group_with_minimum_instant_value_loss(s1))
+        
+        '''
+        9) Remove all P-subgroup in G from PGL and put G in GL
+        '''
+        for group in G:
+            p_subgroup.remove(group)
+        GL_list.append(G)
+
+    '''
+    10) for each remaining P-subgroup s' do
+    '''
+    for group in p_subgroup:
+        '''
+        11) Find corrisponding G' and add s' into G'
+        '''
+        # TODO: TBD + Check 
         s1 = minimum_instant_value_loss(p_subgroup)
 
 
