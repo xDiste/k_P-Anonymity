@@ -5,7 +5,7 @@ import sys
 import random
 from node import Node
 from dataset_anonymized import DatasetAnonymized
-
+max_level = 4
 
 def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
     '''
@@ -90,8 +90,100 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
     bad_leaf_nodes = list()
 
 
-def top_down_clustering(p_subgroup, k_value, p_value):
-    return
+def find_tuple_with_maximum_ivl(fixed_tuple, time_series, key_fixed_tuple, maximum_value, minimum_value):
+    """
+    By scanning all tuples once, we can find tuple t1 that maximizes IVL(fixed_tuple, t1)
+    """
+    max_value = 0
+    tuple_with_max_ivl = None
+    for key, value in time_series.items():
+        if key != key_fixed_tuple:
+            ivl = instant_value_loss([fixed_tuple, time_series[key]])
+            if ivl >= max_value:
+                tuple_with_max_ivl = key
+    return tuple_with_max_ivl
+
+
+def subset_partition(time_series):
+    '''
+    partition T into two exclusive subsets T1 and T2 such that T1 and T2 are more local than T, and either T1 or T2 have at least k tuples
+    Each si will be partitioned into new subgroups no smaller than P using a top-down partitioning method similar to the top-down greedy
+    search algorithm proposed in [25]. This partitioning process is targeted at minimizing the total instant value loss in the partitions.
+    '''
+    keys = list(time_series.keys())
+    rounds = 6  # By up to 6 rounds, we can achieve more than 98.75% of the maximal penalty.
+
+    # pick random tuple
+    random_tuple = keys[random.randint(0, len(keys) - 1)]
+    group_u = dict()
+    group_v = dict()
+    group_u[random_tuple] = time_series[random_tuple]
+    del time_series[random_tuple]
+    last_row = random_tuple
+    for round in range(0, rounds*2 - 1):
+        if len(time_series) > 0:
+            if round % 2 == 0:
+                v = find_tuple_with_maximum_ivl(group_u[last_row], time_series, last_row, maximum_value, minimum_value)
+                group_v[v] = time_series[v]
+                last_row = v
+                del time_series[v]
+            else:
+                u = find_tuple_with_maximum_ivl(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
+                group_u[u] = time_series[u]
+                last_row = u
+                del time_series[u]
+
+    index_keys_time_series = [x for x in range(0, len(list(time_series.keys())))]
+    random.shuffle(index_keys_time_series)
+
+    # add random row to group with lower IVL
+    keys = [list(time_series.keys())[x] for x in index_keys_time_series]
+    for key in keys:
+        row_temp = time_series[key]
+        group_u_values = list(group_u.values())
+        group_v_values = list(group_v.values())
+        group_u_values.append(row_temp)
+        group_v_values.append(row_temp)
+
+        ivl_u = instant_value_loss(group_u_values)
+        ivl_v = instant_value_loss(group_v_values)
+
+        if ivl_v < ivl_u:
+            group_v[key] = row_temp
+        else:
+            group_u[key] = row_temp
+        del time_series[key]
+ 
+
+def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized=None):
+    '''
+    k-anonymity based on work of Xu et al. 2006,
+    Utility-Based Anonymization for Privacy Preservation with Less Information Loss
+    NOTE: T means Timeseries
+    Input: a T, parameter k, weights of attributes, hierarchies on categorical attributes;
+    Output: a k-anonymous T
+    1: IF |T| ≤ k THEN RETURN;
+    2: ELSE {
+        3: partition T into two exclusive subsets T1 and T2 such
+        that T1 and T2 are more local than T, and either T1 or T2 have at least k tuples;
+        4: IF |T1| > k THEN recursively partition T1;
+        5: IF |T2| > k THEN recursively partition T2;
+    }
+    6: adjust the groups so that each group has at least k tuples;
+    '''
+    if len(time_series) <= 2 * p_value:
+        time_series_k_anonymized.append(time_series)
+        return
+    else:
+        t1, t2 = subset_partition(time_series)
+        if len(t1) > p_value:
+            top_down_clustering(t1, p_value, time_series_k_anonymized)
+        else:
+            time_series_k_anonymized.append(t1)
+        if len(t2) > p_value:
+            top_down_clustering(t2, p_value, time_series_k_anonymized)
+        else:
+            time_series_k_anonymized.append(t2)
 
 
 def instant_value_loss(groupList):
@@ -142,8 +234,9 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         p_subgroup.append(node)
 
     # Init variables
-    GL_list = list();
+    GL_list = list()
     tmp_p_subgroup = list()
+    time_series_k_anonymized = list()
 
     '''
     1) for each P-subgroup that size >= 2*P do
@@ -152,7 +245,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         '''
         2) Split it by top-down clustering
         '''
-        top_down_clustering(p_subgroup, k_value, p_value)
+        top_down_clustering(p_subgroup, p_value, time_series_k_anonymized)
     
     '''
     3) if any P-subgroup that size >= k then:
@@ -203,36 +296,33 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         s1 = minimum_instant_value_loss(p_subgroup)
 
 
-def main_KAPRA(k_value=None, p_value=None, paa_value=None dataset_path=None):
+def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
     if os.path.isfile(dataset_path):
         # read time_series_from_file
         time_series = pd.read_csv(dataset_path)
 
         # get columns name
         columns = list(time_series.columns)
-        columns.pop(0)  # remove
-        # save all maximum value for each attribute
-        attributes_maximum_value = list()
-        attributes_minimum_value = list()
-        for column in columns:
-            attributes_maximum_value.append(time_series[column].max())
-            attributes_minimum_value.append(time_series[column].min())
-        time_series_dict = dict()
+        time_series_index = columns.pop(0)  # remove product code
 
+        time_series_dict = dict()
+        
         # save dict file instead pandas
         for index, row in time_series.iterrows():
             time_series_dict[row[time_series_index]] = list(row[columns])
 
-        # Create-tree phase
+        # create-tree phase
         good_leaf_nodes = list()
         bad_leaf_nodes = list()
 
         # root creation
         node = Node(level=1, group=time_series_dict, paa_value=paa_value)
-        node.start_splitting(p_value=p_value, good_leaf_nodes, bad_leaf_nodes)
+        node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
+
+        print(bad_leaf_nodes)
 
         # Recycle bad-leaves phase
-        recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_values)
+        recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value)
 
         # Group formation phase
         groupFormation(good_leaf_nodes, k_value, p_value)
