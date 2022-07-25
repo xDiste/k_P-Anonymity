@@ -176,7 +176,7 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
         return
     else:
         t1, t2 = subset_partition(time_series)
-        if len(t1) > p_value:
+        if len(t1) > p_value:                           # TODO: CHECK: len(t1) > p oppure len(t1) > 2*p? Ha senso dividere ancora l'insieme t1 se è solo maggiroe di P? Così facendo andiamo a predere il requisito P. Credo sia da controllare 2*P, come fatto in altri punti (punto 1 di questa funzione)
             top_down_clustering(t1, p_value, time_series_k_anonymized)
         else:
             time_series_k_anonymized.append(t1)
@@ -199,7 +199,7 @@ def instant_value_loss(groupList):
     return np.sqrt(summation)
 
 
-def group_with_minimum_instant_value_loss(group):
+def group_with_minimum_instant_value_loss(main_group, merge_group=None):
     p_group_min = dict()
     vl_tmp = float('inf')
     for g in group: 
@@ -229,71 +229,81 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     0) Init
     '''
     # Create P-subgroup
-    p_subgroup = list()
+    PGL = list()
     for node in good_leaf_nodes:
-        p_subgroup.append(node)
+        PGL.append(node)
 
     # Init variables
     GL_list = list()
-    tmp_p_subgroup = list()
+    store_time_series_k_anonymized = list()
     time_series_k_anonymized = list()
 
     '''
     1) for each P-subgroup that size >= 2*P do
     '''
-    while len(p_subgroup) >= 2 * p_value:
-        '''
-        2) Split it by top-down clustering
-        '''
-        top_down_clustering(p_subgroup, p_value, time_series_k_anonymized)
+    for group in PGL:
+        if group.size >= 2 * p_value:
+            '''
+            2) Split it by top-down clustering
+            '''
+            top_down_clustering(group, p_value, time_series_k_anonymized)
+            PGL.remove(group)
+            store_time_series_k_anonymized = store_time_series_k_anonymized + time_series_k_anonymized
     
+    '''
+    consequence of 2) Add top-down clustering result to PGL
+    '''
+    for new_group in store_time_series_k_anonymized:
+        PGL.append(new_group)
+
     '''
     3) if any P-subgroup that size >= k then:
     '''
-    for group in p_subgroup:
+    for group in PGL:
         if group.size >= k_value:
             '''
-            4) add it into GL and remove it from PGL (p_subgroup)
+            4) add it into GL and remove it from PGL
             '''
             GL_list.append(group)
-            p_subgroup.remove(group)
+            PGL.remove(group)
     
     '''
     5) while |PGL| >= k do
     '''
-    while len(p_subgroup) >= k_value:
+    while sum([group.size for group in PGL]) >= k_value:
         '''
         6) find s1 and G = s1
+        Remove now G from PGL to simplify find group with minimum instant value loss (no needs to skip elements)
         '''
-        # TODO: Check
-        G = group_with_minimum_instant_value_loss(p_subgroup)
+        G = group_with_minimum_instant_value_loss(PGL)
+        PGL.remove(G)
 
         '''
         7) while |G| < k do
         '''
-        while len(s1) < k_value:
+        while G.size < k_value:
             '''
             8) find s_min and add s_min into G
             '''
-            # TODO: Check
-            G.append(group_with_minimum_instant_value_loss(s1))
+            G.append(group_with_minimum_instant_value_loss(main_group=PGL, merge_group=G))
         
         '''
         9) Remove all P-subgroup in G from PGL and put G in GL
+        G already removed in step 6)
         '''
         for group in G:
-            p_subgroup.remove(group)
+            PGL.remove(group)
         GL_list.append(G)
 
     '''
     10) for each remaining P-subgroup s' do
     '''
-    for group in p_subgroup:
+    for s_first in PGL:
         '''
         11) Find corrisponding G' and add s' into G'
         '''
-        # TODO: TBD + Check 
-        s1 = minimum_instant_value_loss(p_subgroup)
+        G_first = group_with_minimum_instant_value_loss(main_group=GL_list, merge_group=s_first)
+        G_first.append(s_first)
 
 
 def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
