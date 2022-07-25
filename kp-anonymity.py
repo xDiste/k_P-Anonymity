@@ -23,6 +23,14 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
     '''
 
     '''
+    0) invariant: 
+        - good_leaf_nodes: it must contain the leaves considered GOOD
+        - bad_leaf_nodes: it must contain the leaves considered BAD
+    '''
+    if(len(bad_leaf_nodes) == 0):
+        return
+
+    '''
     1) current-level = max-bad-level
     '''
     current_level = max([bad_node.level for bad_node in bad_leaf_nodes])
@@ -171,7 +179,7 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
     }
     6: adjust the groups so that each group has at least k tuples;
     '''
-    if len(time_series) <= 2 * p_value:
+    if time_series.size <= 2 * p_value:
         time_series_k_anonymized.append(time_series)
         return
     else:
@@ -184,6 +192,33 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
             top_down_clustering(t2, p_value, time_series_k_anonymized)
         else:
             time_series_k_anonymized.append(t2)
+    '''
+    # Versione lunga, ma simile allo pseudocodice
+    if time_series.size <= 2 * p_value:
+        time_series_k_anonymized.append(time_series)
+        return
+    else:
+        t1, t2 = subset_partition(time_series)
+        if t1.size > 2*p_value:
+            top_down_clustering(t1, p_value, time_series_k_anonymized)
+        else:
+            time_series_k_anonymized.append(t1)
+        if t2.size > 2*p_value:
+            top_down_clustering(t2, p_value, time_series_k_anonymized)
+        else:
+            time_series_k_anonymized.append(t2)
+
+    # Versione corta, da me ottimizzata
+    # Evito i controlli su t1 e t2 perchè richiamando ricorsivamente questi controlli verrebbero effettuati 
+    # dalla condizione di uscita della ricorsione, risultando quindi ridondanti
+    if time_series.size <= 2 * p_value:
+        time_series_k_anonymized.append(time_series)
+        return
+    else:
+        t1, t2 = subset_partition(time_series)
+        top_down_clustering(t1, p_value, time_series_k_anonymized)
+        top_down_clustering(t2, p_value, time_series_k_anonymized)
+    '''
 
 
 def instant_value_loss(groupList):
@@ -200,13 +235,19 @@ def instant_value_loss(groupList):
 
 
 def group_with_minimum_instant_value_loss(main_group, merge_group=None):
+    '''
+    for each element in main_group:
+        compute value loss
+        find minimum value loss
+    return the group with minimum value loss
+    '''
     p_group_min = dict()
-    vl_tmp = float('inf')
-    for g in group: 
-        vl = compute_instant_value_loss(list(group.values()))
-        if vl < vl_tmp:
-            p_group_min = g
-            vl_tmp = vl
+    min_value_loss = float('inf')
+    for group in main_group: 
+        tmp_value_loss = instant_value_loss(list(group.values()) + list(merge_group.values()))
+        if min_value_loss > tmp_value_loss:
+            p_group_min = group
+            min_value_loss = tmp_value_loss
     return p_group_min
 
 
@@ -304,6 +345,8 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         '''
         G_first = group_with_minimum_instant_value_loss(main_group=GL_list, merge_group=s_first)
         G_first.append(s_first)
+    
+    return GL_list
 
 
 def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
@@ -329,13 +372,15 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         node = Node(level=1, group=time_series_dict, paa_value=paa_value)
         node.start_splitting(p_value, max_level, good_leaf_nodes, bad_leaf_nodes)
 
-        print(bad_leaf_nodes)
-
         # Recycle bad-leaves phase
         recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value)
 
         # Group formation phase
-        groupFormation(good_leaf_nodes, k_value, p_value)
+        anonymized_result = groupFormation(good_leaf_nodes, k_value, p_value)
+        
+        # NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE 
+        # NOTE Dentro anonymized_result dovremmo avere il risultato complessio di tutto l'algoritmo, controllare lui e salvare lui dentro il file NOTE
+        # NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE 
 
         # Save all (to check if it's right)
         dataset_anonymized = DatasetAnonymized()
