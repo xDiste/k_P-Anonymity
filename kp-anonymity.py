@@ -98,7 +98,7 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
     bad_leaf_nodes = list()
 
 
-def find_tuple_with_maximum_ivl(fixed_tuple, time_series, key_fixed_tuple, maximum_value, minimum_value):
+def find_tuple_with_maximum_ivl(fixed_tuple, time_series, key_fixed_tuple):
     """
     By scanning all tuples once, we can find tuple t1 that maximizes IVL(fixed_tuple, t1)
     """
@@ -131,12 +131,12 @@ def subset_partition(time_series):
     for round in range(0, rounds*2 - 1):
         if len(time_series) > 0:
             if round % 2 == 0:
-                v = find_tuple_with_maximum_ivl(group_u[last_row], time_series, last_row, maximum_value, minimum_value)
+                v = find_tuple_with_maximum_ivl(group_u[last_row], time_series, last_row)
                 group_v[v] = time_series[v]
                 last_row = v
                 del time_series[v]
             else:
-                u = find_tuple_with_maximum_ivl(group_v[last_row], time_series, last_row, maximum_value, minimum_value)
+                u = find_tuple_with_maximum_ivl(group_v[last_row], time_series, last_row)
                 group_u[u] = time_series[u]
                 last_row = u
                 del time_series[u]
@@ -161,6 +161,7 @@ def subset_partition(time_series):
         else:
             group_u[key] = row_temp
         del time_series[key]
+    return group_u, group_v
  
 
 def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized=None):
@@ -179,7 +180,7 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
     }
     6: adjust the groups so that each group has at least k tuples;
     '''
-    if time_series.size <= 2 * p_value:
+    if len(time_series) <= 2 * p_value:
         time_series_k_anonymized.append(time_series)
         return
     else:
@@ -207,7 +208,6 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
             top_down_clustering(t2, p_value, time_series_k_anonymized)
         else:
             time_series_k_anonymized.append(t2)
-
     # Versione corta, da me ottimizzata
     # Evito i controlli su t1 e t2 perchè richiamando ricorsivamente questi controlli verrebbero effettuati 
     # dalla condizione di uscita della ricorsione, risultando quindi ridondanti
@@ -219,7 +219,7 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
         top_down_clustering(t1, p_value, time_series_k_anonymized)
         top_down_clustering(t2, p_value, time_series_k_anonymized)
     '''
-
+    
 
 def instant_value_loss(groupList):
     summation = 0
@@ -230,25 +230,25 @@ def instant_value_loss(groupList):
                 r_upper = groupList[row][column]
             if groupList[row][column] < r_lower:
                 r_lower = groupList[row][column]
-        summation += ((pow(r_upper - r_lower), 2) / len(groupList))
+        summation += ((pow(r_upper - r_lower, 2)) / len(groupList))
     return np.sqrt(summation)
+   
 
-
-def group_with_minimum_instant_value_loss(main_group, merge_group=None):
+def group_with_minimum_instant_value_loss(main_group, merge_group=dict()):
     '''
     for each element in main_group:
         compute value loss
         find minimum value loss
     return the group with minimum value loss
     '''
-    p_group_min = dict()
+    group_min = dict()
     min_value_loss = float('inf')
-    for group in main_group: 
+    for group in main_group:
         tmp_value_loss = instant_value_loss(list(group.values()) + list(merge_group.values()))
         if min_value_loss > tmp_value_loss:
-            p_group_min = group
+            group_min = group
             min_value_loss = tmp_value_loss
-    return p_group_min
+    return group_min
 
 
 def groupFormation(good_leaf_nodes, k_value, p_value):
@@ -272,7 +272,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     # Create P-subgroup
     PGL = list()
     for node in good_leaf_nodes:
-        PGL.append(node)
+        PGL.append(node.group)
 
     # Init variables
     GL_list = list()
@@ -282,8 +282,8 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     '''
     1) for each P-subgroup that size >= 2*P do
     '''
-    for group in PGL:
-        if group.size >= 2 * p_value:
+    for i, group in enumerate(PGL):
+        if len(group) >= 2 * p_value:
             '''
             2) Split it by top-down clustering
             '''
@@ -301,7 +301,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     3) if any P-subgroup that size >= k then:
     '''
     for group in PGL:
-        if group.size >= k_value:
+        if len(group) >= k_value:
             '''
             4) add it into GL and remove it from PGL
             '''
@@ -311,7 +311,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     '''
     5) while |PGL| >= k do
     '''
-    while sum([group.size for group in PGL]) >= k_value:
+    while len(PGL) >= k_value:
         '''
         6) find s1 and G = s1
         Remove now G from PGL to simplify find group with minimum instant value loss (no needs to skip elements)
@@ -322,18 +322,21 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         '''
         7) while |G| < k do
         '''
-        while G.size < k_value:
+        while len(G) < k_value:
             '''
             8) find s_min and add s_min into G
             '''
-            G.append(group_with_minimum_instant_value_loss(main_group=PGL, merge_group=G))
+            newGroup = group_with_minimum_instant_value_loss(main_group=PGL)
+            PGL.remove(newGroup)
+            G.update(newGroup)
         
         '''
         9) Remove all P-subgroup in G from PGL and put G in GL
         G already removed in step 6)
         '''
         for group in G:
-            PGL.remove(group)
+            if group in PGL:
+                PGL.remove(group)
         GL_list.append(G)
 
     '''
@@ -344,7 +347,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         11) Find corrisponding G' and add s' into G'
         '''
         G_first = group_with_minimum_instant_value_loss(main_group=GL_list, merge_group=s_first)
-        G_first.append(s_first)
+        G_first.update(s_first)
     
     return GL_list
 
@@ -377,14 +380,15 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
 
         # Group formation phase
         anonymized_result = groupFormation(good_leaf_nodes, k_value, p_value)
-        
-        # NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE 
-        # NOTE Dentro anonymized_result dovremmo avere il risultato complessio di tutto l'algoritmo, controllare lui e salvare lui dentro il file NOTE
-        # NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE 
 
-        # Save all (to check if it's right)
+        VL_TOT = 0
+        for d in anonymized_result:
+            VL_TOT += instant_value_loss(list(d.values()))
+        print("IVL", VL_TOT)
+
+        # Save all
         dataset_anonymized = DatasetAnonymized()
-        for group in time_series_k_anonymized:
+        for group in anonymized_result:
             dataset_anonymized.anonymized_data.append(group)
 
             good_leaf_nodes = list()

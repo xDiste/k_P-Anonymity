@@ -7,7 +7,6 @@ from saxpy.paa import paa
 
 
 class Node:
-
     def __init__(self, level: int = 1, pattern_representation: str = "", label: str = "intermediate",
                  group: dict = None, parent=None, paa_value: int = 3):
         self.level = level  # number of different char for rappresentation
