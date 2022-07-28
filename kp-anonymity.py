@@ -311,7 +311,9 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     '''
     5) while |PGL| >= k do
     '''
-    while len(PGL) >= k_value:
+    # NOTE: sum([group.size for group in PGL]) >= k_value sono due risultati diversi, quale dei due è giusto? 
+    # Perché da pseudo-codice prenderei la lungezza di PGL con len
+    while len(PGL) >= k_value:  
         '''
         6) find s1 and G = s1
         Remove now G from PGL to simplify find group with minimum instant value loss (no needs to skip elements)
