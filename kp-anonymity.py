@@ -185,40 +185,8 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
         return
     else:
         t1, t2 = subset_partition(time_series)
-        if len(t1) > p_value:                           # TODO: CHECK: len(t1) > p oppure len(t1) > 2*p? Ha senso dividere ancora l'insieme t1 se è solo maggiroe di P? Così facendo andiamo a predere il requisito P. Credo sia da controllare 2*P, come fatto in altri punti (punto 1 di questa funzione)
-            top_down_clustering(t1, p_value, time_series_k_anonymized)
-        else:
-            time_series_k_anonymized.append(t1)
-        if len(t2) > p_value:
-            top_down_clustering(t2, p_value, time_series_k_anonymized)
-        else:
-            time_series_k_anonymized.append(t2)
-    '''
-    # Versione lunga, ma simile allo pseudocodice
-    if time_series.size <= 2 * p_value:
-        time_series_k_anonymized.append(time_series)
-        return
-    else:
-        t1, t2 = subset_partition(time_series)
-        if t1.size > 2*p_value:
-            top_down_clustering(t1, p_value, time_series_k_anonymized)
-        else:
-            time_series_k_anonymized.append(t1)
-        if t2.size > 2*p_value:
-            top_down_clustering(t2, p_value, time_series_k_anonymized)
-        else:
-            time_series_k_anonymized.append(t2)
-    # Versione corta, da me ottimizzata
-    # Evito i controlli su t1 e t2 perchè richiamando ricorsivamente questi controlli verrebbero effettuati 
-    # dalla condizione di uscita della ricorsione, risultando quindi ridondanti
-    if time_series.size <= 2 * p_value:
-        time_series_k_anonymized.append(time_series)
-        return
-    else:
-        t1, t2 = subset_partition(time_series)
         top_down_clustering(t1, p_value, time_series_k_anonymized)
         top_down_clustering(t2, p_value, time_series_k_anonymized)
-    '''
     
 
 def instant_value_loss(groupList):
@@ -311,8 +279,6 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
     '''
     5) while |PGL| >= k do
     '''
-    # NOTE: sum([group.size for group in PGL]) >= k_value sono due risultati diversi, quale dei due è giusto? 
-    # Perché da pseudo-codice prenderei la lungezza di PGL con len
     while len(PGL) >= k_value:  
         '''
         6) find s1 and G = s1
@@ -324,14 +290,14 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         '''
         7) while |G| < k do
         '''
-        while len(G) < k_value:
+        while len(G) < k_value and len(PGL) > 0:
             '''
             8) find s_min and add s_min into G
             '''
             newGroup = group_with_minimum_instant_value_loss(main_group=PGL)
-            PGL.remove(newGroup)
             G.update(newGroup)
-        
+            PGL.remove(newGroup)
+
         '''
         9) Remove all P-subgroup in G from PGL and put G in GL
         G already removed in step 6)
