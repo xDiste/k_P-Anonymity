@@ -5,7 +5,13 @@ import sys
 import random
 from node import Node
 from dataset_anonymized import DatasetAnonymized
+from saxpy.paa import paa
+from saxpy.znorm import znorm
+from saxpy.sax import ts_to_string
+from saxpy.alphabet import cuts_for_asize
+
 max_level = 4
+
 
 def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
     '''
@@ -27,7 +33,7 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
         - good_leaf_nodes: it must contain the leaves considered GOOD
         - bad_leaf_nodes: it must contain the leaves considered BAD
     '''
-    if(len(bad_leaf_nodes) == 0):
+    if len(bad_leaf_nodes) == 0:
         return
 
     '''
@@ -49,8 +55,10 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
         for bad_node in bad_leaf_nodes:
             if bad_node.level == current_level:
                 patternRappresentation = bad_node.pattern_representation
-                nodeInCurrentLevel[patternRappresentation].append(bad_node) 
-        
+                if patternRappresentation in nodeInCurrentLevel:
+                    nodeInCurrentLevel[patternRappresentation].append(bad_node)
+                else:
+                    nodeInCurrentLevel[patternRappresentation] = [bad_node]
         '''
         4) merge them to a new node leaf-merge;
         '''
@@ -87,8 +95,9 @@ def recycleBadLeaves(good_leaf_nodes, bad_leaf_nodes, p_value, paa_value):
                 data = np.array(values_group[0])
                 data_znorm = znorm(data)
                 data_paa = paa(data_znorm, paa_value)
-                pr = ts_to_string(data_paa, cuts_for_asize(current_level-1)) if current_level-1 > 1 else 'a' * paa_value
-                bad_node.level = current_level-1
+                pr = ts_to_string(data_paa,
+                cuts_for_asize(current_level - 1)) if current_level - 1 > 1 else 'a' * paa_value
+                bad_node.level = current_level - 1
                 bad_node.pattern_representation = pr
         current_level -= 1
 
@@ -102,13 +111,17 @@ def find_tuple_with_maximum_ivl(fixed_tuple, time_series, key_fixed_tuple):
     """
     By scanning all tuples once, we can find tuple t1 that maximizes IVL(fixed_tuple, t1)
     """
-    max_value = 0
+    i = 0
+    max_value = -float('inf')
     tuple_with_max_ivl = None
     for key, value in time_series.items():
         if key != key_fixed_tuple:
+            i += 1
+            a = [fixed_tuple, time_series[key]]
             ivl = instant_value_loss([fixed_tuple, time_series[key]])
             if ivl >= max_value:
                 tuple_with_max_ivl = key
+                max_value = ivl
     return tuple_with_max_ivl
 
 
@@ -126,9 +139,9 @@ def subset_partition(time_series):
     group_u = dict()
     group_v = dict()
     group_u[random_tuple] = time_series[random_tuple]
-    del time_series[random_tuple]
+    #del time_series[random_tuple]
     last_row = random_tuple
-    for round in range(0, rounds*2 - 1):
+    for round in range(0, rounds * 2 - 1):
         if len(time_series) > 0:
             if round % 2 == 0:
                 v = find_tuple_with_maximum_ivl(group_u[last_row], time_series, last_row)
@@ -162,7 +175,7 @@ def subset_partition(time_series):
             group_u[key] = row_temp
         del time_series[key]
     return group_u, group_v
- 
+
 
 def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized=None):
     '''
@@ -187,28 +200,38 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
         t1, t2 = subset_partition(time_series)
         top_down_clustering(t1, p_value, time_series_k_anonymized)
         top_down_clustering(t2, p_value, time_series_k_anonymized)
-    
+
+
+def checkTuple(tuple):
+    return not (any(x != x for x in tuple))
+
 
 def instant_value_loss(groupList):
-    summation = 0
-    for row in range(0, len(groupList)):
-        r_lower = float('inf'); r_upper = 0
-        for column in range(0, len(groupList[row])):
-            if groupList[row][column] > r_upper:
-                r_upper = groupList[row][column]
-            if groupList[row][column] < r_lower:
-                r_lower = groupList[row][column]
-        summation += ((pow(r_upper - r_lower, 2)) / len(groupList))
-    return np.sqrt(summation)
-   
+    boundsList = list()
+    for index in range(len(groupList[0])):
+        tmpList = list()
+        for group in groupList:
+            tmpList.append(group[index])
+        if (checkTuple((max(tmpList), min(tmpList)))):
+            boundsList.append((max(tmpList), min(tmpList)))
+    return np.sqrt(sum((pow((upper - lower), 2) / len(boundsList)) for upper, lower in boundsList))
 
-def group_with_minimum_instant_value_loss(main_group, merge_group=dict()):
+def compute_total_instant_value_loss(anonymized_result):
+    VL_TOT = 0
+    for d in anonymized_result:
+        VL_TOT += instant_value_loss(list(d.values()))
+    return VL_TOT
+
+
+def group_with_minimum_instant_value_loss(main_group, merge_group=None):
     '''
     for each element in main_group:
         compute value loss
         find minimum value loss
     return the group with minimum value loss
     '''
+    if merge_group is None:
+        merge_group = dict()
     group_min = dict()
     min_value_loss = float('inf')
     for group in main_group:
@@ -258,7 +281,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
             top_down_clustering(group, p_value, time_series_k_anonymized)
             PGL.remove(group)
             store_time_series_k_anonymized = store_time_series_k_anonymized + time_series_k_anonymized
-    
+
     '''
     consequence of 2) Add top-down clustering result to PGL
     '''
@@ -275,11 +298,11 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
             '''
             GL_list.append(group)
             PGL.remove(group)
-    
+
     '''
     5) while |PGL| >= k do
     '''
-    while len(PGL) >= k_value:  
+    while len(PGL) >= k_value:
         '''
         6) find s1 and G = s1
         Remove now G from PGL to simplify find group with minimum instant value loss (no needs to skip elements)
@@ -316,7 +339,7 @@ def groupFormation(good_leaf_nodes, k_value, p_value):
         '''
         G_first = group_with_minimum_instant_value_loss(main_group=GL_list, merge_group=s_first)
         G_first.update(s_first)
-    
+
     return GL_list
 
 
@@ -330,7 +353,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         time_series_index = columns.pop(0)  # remove product code
 
         time_series_dict = dict()
-        
+
         # save dict file instead pandas
         for index, row in time_series.iterrows():
             time_series_dict[row[time_series_index]] = list(row[columns])
@@ -349,10 +372,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
         # Group formation phase
         anonymized_result = groupFormation(good_leaf_nodes, k_value, p_value)
 
-        VL_TOT = 0
-        for d in anonymized_result:
-            VL_TOT += instant_value_loss(list(d.values()))
-        print("IVL", VL_TOT)
+        print("IVL: ", compute_total_instant_value_loss(anonymized_result))
 
         # Save all
         dataset_anonymized = DatasetAnonymized()
@@ -367,7 +387,7 @@ def main_KAPRA(k_value=None, p_value=None, paa_value=None, dataset_path=None):
 
             if len(bad_leaf_nodes) > 0:
                 Node.postprocessing(good_leaf_nodes, bad_leaf_nodes)
-                
+
             dataset_anonymized.pattern_anonymized_data.append(good_leaf_nodes)
         dataset_anonymized.compute_anonymized_data()
         dataset_anonymized.save_on_file("./Output/kapra_output.csv")
