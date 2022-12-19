@@ -248,4 +248,3 @@ class Node:
             self.pattern_representation = ts_to_string(data_paa, cuts_for_asize(self.level))
         else:
             logger.info("Can't split again, max level already reached")
-
