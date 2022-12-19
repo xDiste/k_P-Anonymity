@@ -4,12 +4,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-K = [7, 9, 10, 11]; P = [5, 6, 7]; PAA = [3, 6, 11]
+K = [9, 10, 11]; P = [5, 6, 7]; PAA = [3, 6, 11]
 
 pathDataset = './Dataset/MLTollsStackOverflow.csv'
 
 labels = list(); kapra_time = list(); IVLs = list()
-min = float('inf')
+min_time = float('inf')
 
 parameters = {'K' : 0, 'P' : 0, 'PAA' : 0}
 
@@ -18,44 +18,33 @@ parameters = {'K' : 0, 'P' : 0, 'PAA' : 0}
 # Save result appending IVL to a fileTmp
 for k in K:
     for p in P:
-        if p >= k:
-            continue
-        for paa in PAA:
-            print("ITERAZIONE: ",k, p, paa)
-            start = time.time()
-            os.system(f'python3 ./kp-anonymity.py {k} {p} {paa} {pathDataset} | grep IVL >> fileTmp.txt')
-            stop = time.time()
-            execTime = stop - start
-            if min > execTime:
-                min = execTime
-                parameters['K'] = k; parameters['P'] = p; parameters['PAA'] = paa
-            labels.append(f"K={k}\nP={p}\nPAA={paa}")
-            kapra_time.append(execTime)
+        if p < k:
+            for paa in PAA:
+                print("ITERAZIONE: ", k, p, paa)
+                start = time.time()
+                os.system(f'python3 ./kp-anonymity.py {k} {p} {paa} {pathDataset} | grep IVL >> fileTmp.txt')
+                stop = time.time()
+                execTime = stop - start
+                if min_time > execTime:
+                    min_time = execTime
+                    parameters['K'] = k; parameters['P'] = p; parameters['PAA'] = paa
+                labels.append(f"K={k}\nP={p}\nPAA={paa}")
+                kapra_time.append(execTime)
 
 
 # Read fileTmp with result previously saved inside
 lines = []
-
 with open('fileTmp.txt', 'r') as f:
     lines = f.readlines()
 
 os.system('rm ./fileTmp.txt')
 
-for i in range(0, len(lines)):
-    IVLs.append(float(lines[i].split('IVL')[1].strip()))    # to chart purpose
-
-minVL = float('inf'); minLindex = -1
-
-# Find minimum value
-for i in range(0, len(lines)):
-    if float(lines[i].split('IVL')[1].strip()) < minVL:
-        minVL = float(lines[i].split('IVL')[1].strip())
-        minLindex = i
+# to chart purpose
+IVLs = [float(lines[i].split('IVL: ')[1].strip()) for i in range (0, len(lines))]
 
 # Print and plot output
-print("Time:", parameters)
-print("INDEX", minLindex)
-print("IVL:", labels[minLindex].strip(), minVL)
+print("Time: ", parameters)
+print("IVL: ", labels[IVLs.index(min(IVLs))], min(IVLs))
 
 plt.figure(figsize=(25, 7))
 plt.bar(labels, kapra_time, width = 0.3)

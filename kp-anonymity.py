@@ -201,10 +201,8 @@ def top_down_clustering(time_series=None, p_value=None, time_series_k_anonymized
         top_down_clustering(t1, p_value, time_series_k_anonymized)
         top_down_clustering(t2, p_value, time_series_k_anonymized)
 
-
 def checkTuple(tuple):
     return not (any(x != x for x in tuple))
-
 
 def instant_value_loss(groupList):
     boundsList = list()
