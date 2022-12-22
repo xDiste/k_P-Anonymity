@@ -111,13 +111,10 @@ def find_tuple_with_maximum_ivl(fixed_tuple, time_series, key_fixed_tuple):
     """
     By scanning all tuples once, we can find tuple t1 that maximizes IVL(fixed_tuple, t1)
     """
-    i = 0
     max_value = -float('inf')
     tuple_with_max_ivl = None
     for key, value in time_series.items():
         if key != key_fixed_tuple:
-            i += 1
-            a = [fixed_tuple, time_series[key]]
             ivl = instant_value_loss([fixed_tuple, time_series[key]])
             if ivl >= max_value:
                 tuple_with_max_ivl = key
@@ -139,7 +136,7 @@ def subset_partition(time_series):
     group_u = dict()
     group_v = dict()
     group_u[random_tuple] = time_series[random_tuple]
-    #del time_series[random_tuple]
+    del time_series[random_tuple]
     last_row = random_tuple
     for round in range(0, rounds * 2 - 1):
         if len(time_series) > 0:
