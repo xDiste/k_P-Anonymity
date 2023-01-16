@@ -38,4 +38,4 @@ In "Dataset" folder there are two datasets that can be use as input dataset. The
 - [Sales_Transaction_Dataset_Weekly_Final.csv](./Dataset/Sales_Transaction_Dataset_Weekly_Final.csv)
 
 ## Presentation
-Read the presentation: [k,P-Anonymity](./k_P-Anonymity.pdf)
+Read the presentation: [k,P-Anonymity](./Presentation/k_P-Anonymity.pdf)
