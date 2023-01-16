@@ -1,12 +1,10 @@
 import os
 import time
-from pathlib import Path
 import matplotlib.pyplot as plt
-import numpy as np
 
 K = [9, 10, 11]; P = [5, 6, 7]; PAA = [3, 6, 11]
 
-pathDataset = './Dataset/MLTollsStackOverflow.csv'
+pathDataset = './Dataset/NIFTY50-1_day_with_indicators.csv'
 
 labels = list(); kapra_time = list(); IVLs = list()
 min_time = float('inf')
