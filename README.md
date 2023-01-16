@@ -35,6 +35,7 @@ python3 runTests.py
 ## Datasets
 In "Dataset" folder there are two datasets that can be use as input dataset. The input datasets are .csv files.
 - [MLTollsStackOverflow.csv](./Dataset/MLTollsStackOverflow.csv)
+- [NIFTY50-1_day_with_indicators.csv](./Dataset/NIFTY50-1_day_with_indicators.csv)
 - [Sales_Transaction_Dataset_Weekly_Final.csv](./Dataset/Sales_Transaction_Dataset_Weekly_Final.csv)
 
 ## Presentation
