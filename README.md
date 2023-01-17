@@ -40,3 +40,9 @@ In "Dataset" folder there are two datasets that can be use as input dataset. The
 
 ## Presentation
 Read the presentation: [(k,P)-Anonymity](./Presentation/k_P-Anonymity.pdf)
+
+---
+Work done by:
+* [Alex Di Stefano](https://github.com/xDiste)
+* [Christian Stingone](https://github.com/ChriStingo)
+
